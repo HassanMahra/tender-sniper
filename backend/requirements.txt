@@ -1,0 +1,14 @@
+# TenderSniper Backend Dependencies
+# ==================================
+
+# Google Gemini AI SDK for tender analysis
+google-generativeai>=0.8.0
+
+# HTTP requests library
+requests>=2.31.0
+
+# RSS/Atom feed parser for bund.de feeds
+feedparser>=6.0.10
+
+# Python dotenv for local development (optional)
+python-dotenv>=1.0.0

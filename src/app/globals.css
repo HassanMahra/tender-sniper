@@ -1,26 +1,150 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+
+  /* TenderSniper Brand Colors */
+  --color-signal-orange: var(--signal-orange);
+  --color-signal-orange-hover: var(--signal-orange-hover);
+  --color-tech-blue: var(--tech-blue);
+  --color-tech-blue-hover: var(--tech-blue-hover);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* TenderSniper Dark Mode Only Design System */
+:root {
+  --radius: 0.75rem;
+  
+  /* Base Colors - Dark Mode Only */
+  --background: #0A0A0A;
+  --foreground: #EDEDED;
+  
+  /* Card & Surface */
+  --card: #111111;
+  --card-foreground: #EDEDED;
+  --popover: #111111;
+  --popover-foreground: #EDEDED;
+  
+  /* Brand Colors */
+  --signal-orange: #FF6B35;
+  --signal-orange-hover: #FF8555;
+  --tech-blue: #3B82F6;
+  --tech-blue-hover: #60A5FA;
+  
+  /* Primary - Signal Orange */
+  --primary: #FF6B35;
+  --primary-foreground: #FFFFFF;
+  
+  /* Secondary */
+  --secondary: #1A1A1A;
+  --secondary-foreground: #EDEDED;
+  
+  /* Muted */
+  --muted: #1A1A1A;
+  --muted-foreground: #888888;
+  
+  /* Accent - Tech Blue */
+  --accent: #3B82F6;
+  --accent-foreground: #FFFFFF;
+  
+  /* Destructive */
+  --destructive: #EF4444;
+  
+  /* Borders & Inputs */
+  --border: #262626;
+  --input: #1A1A1A;
+  --ring: #FF6B35;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer utilities {
+  /* Text Gradient Utility */
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #FF6B35 0%, #FF8555 50%, #3B82F6 100%);
+  }
+  
+  /* Glow Effects */
+  .glow-orange {
+    box-shadow: 0 0 40px rgba(255, 107, 53, 0.15),
+                0 0 80px rgba(255, 107, 53, 0.1);
+  }
+  
+  .glow-blue {
+    box-shadow: 0 0 40px rgba(59, 130, 246, 0.15),
+                0 0 80px rgba(59, 130, 246, 0.1);
+  }
+  
+  .glow-border {
+    position: relative;
+  }
+  
+  .glow-border::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(255, 107, 53, 0.5), rgba(59, 130, 246, 0.5));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+  
+  /* Glass Effect */
+  .glass {
+    @apply backdrop-blur-xl;
+    background: rgba(17, 17, 17, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  
+  /* Animated Background Grid */
+  .bg-grid {
+    background-image: 
+      linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 64px 64px;
+  }
 }
