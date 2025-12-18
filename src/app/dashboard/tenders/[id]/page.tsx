@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { TenderDetailContent } from "@/components/dashboard/TenderDetailContent";
-import { mockTenders } from "@/lib/mock-data";
+import { mapDbTenderToTender, type DbTender } from "@/types/database";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -18,8 +18,23 @@ export default async function TenderDetailPage({ params }: PageProps) {
     redirect("/login");
   }
 
-  // Find tender by ID
-  const tender = mockTenders.find((t) => t.id === id);
+  // Fetch tender from database
+  let tender = null;
+  try {
+    const { data, error } = await supabase
+      .from("tenders")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (error) {
+      console.log("🔍 [TenderDetail] Error fetching tender:", error.message);
+    } else if (data) {
+      tender = mapDbTenderToTender(data as DbTender);
+    }
+  } catch (error) {
+    console.log("🔍 [TenderDetail] Error:", error);
+  }
 
   // Extract user metadata
   const userData = {
@@ -31,7 +46,7 @@ export default async function TenderDetailPage({ params }: PageProps) {
 
   return (
     <TenderDetailContent 
-      tender={tender || null}
+      tender={tender}
       user={userData}
     />
   );

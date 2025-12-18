@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApplicationDialog } from "@/components/dashboard/ApplicationDialog";
-import type { Tender } from "@/lib/mock-data";
+import type { Tender } from "@/types/database";
 import {
   ArrowLeft,
   MapPin,
@@ -40,12 +40,17 @@ interface TenderDetailContentProps {
  * Formats a date string to German locale
  */
 function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString("de-DE", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString;
+    return date.toLocaleDateString("de-DE", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
+  } catch {
+    return dateString;
+  }
 }
 
 /**
@@ -61,11 +66,16 @@ function getScoreColor(score: number): string {
  * Calculate days until deadline
  */
 function getDaysUntilDeadline(dateString: string): number {
-  const deadline = new Date(dateString);
-  const today = new Date();
-  const diffTime = deadline.getTime() - today.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays;
+  try {
+    const deadline = new Date(dateString);
+    if (isNaN(deadline.getTime())) return 30;
+    const today = new Date();
+    const diffTime = deadline.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  } catch {
+    return 30;
+  }
 }
 
 // Mock requirements for demo
@@ -76,18 +86,6 @@ const mockRequirements = [
   { text: "Präqualifikation im AVPQ oder ULV", required: false },
   { text: "ISO 9001 Zertifizierung", required: false },
 ];
-
-// Mock summary text
-const mockSummary = `Diese Ausschreibung umfasst umfangreiche Arbeiten im Bereich des kommunalen Hochbaus. Der Auftraggeber sucht einen erfahrenen Fachbetrieb für die fristgerechte und qualitätsgerechte Ausführung.
-
-**Leistungsumfang:**
-- Komplette Ausführung nach VOB/B
-- Koordination mit anderen Gewerken
-- Dokumentation nach öffentlichen Standards
-- Gewährleistung von 5 Jahren
-
-**Besonderheiten:**
-Der Auftraggeber legt besonderen Wert auf termingerechte Fertigstellung und umweltfreundliche Materialien. Eine Ortsbesichtigung wird empfohlen.`;
 
 /**
  * 404 Component for tender not found
@@ -124,6 +122,7 @@ export function TenderDetailContent({ tender, user }: TenderDetailContentProps) 
   }
 
   const daysLeft = getDaysUntilDeadline(tender.deadline);
+  const matchScore = tender.matchScore || 50;
 
   return (
     <>
@@ -178,10 +177,10 @@ export function TenderDetailContent({ tender, user }: TenderDetailContentProps) 
                 variant="outline"
                 className={cn(
                   "text-sm font-semibold tabular-nums px-3 py-1",
-                  getScoreColor(tender.matchScore)
+                  getScoreColor(matchScore)
                 )}
               >
-                {tender.matchScore}% Match
+                {matchScore}% Match
               </Badge>
               <div
                 className={cn(
@@ -212,36 +211,35 @@ export function TenderDetailContent({ tender, user }: TenderDetailContentProps) 
                 </h2>
               </CardHeader>
               <CardContent>
-                <div className="prose prose-invert prose-sm max-w-none">
-                  {mockSummary.split("\n\n").map((paragraph, i) => (
-                    <p key={i} className="text-muted-foreground leading-relaxed">
-                      {paragraph.startsWith("**") ? (
-                        <strong className="text-foreground">
-                          {paragraph.replace(/\*\*/g, "")}
-                        </strong>
-                      ) : paragraph.startsWith("- ") ? (
-                        <span className="block pl-4">
-                          {paragraph.split("\n").map((line, j) => (
-                            <span key={j} className="block">
-                              {line}
-                            </span>
-                          ))}
-                        </span>
-                      ) : (
-                        paragraph
-                      )}
+                {tender.description ? (
+                  <div className="prose prose-invert prose-sm max-w-none">
+                    <p className="text-muted-foreground leading-relaxed whitespace-pre-line">
+                      {tender.description}
                     </p>
-                  ))}
-                </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg bg-secondary/50 p-4 border border-neutral-800">
+                    <p className="text-sm text-muted-foreground">
+                      Keine detaillierte Beschreibung verfügbar. Bitte lade die Original-Ausschreibung herunter.
+                    </p>
+                  </div>
+                )}
 
-                {/* Description from mock data */}
-                {tender.description && (
+                {/* External link info */}
+                {tender.source_url && (
                   <div className="mt-4 rounded-lg bg-secondary/50 p-4 border border-neutral-800">
                     <p className="text-sm text-muted-foreground">
                       <span className="font-medium text-foreground">
-                        Original-Beschreibung:{" "}
+                        Original-Quelle:{" "}
                       </span>
-                      {tender.description}
+                      <a 
+                        href={tender.source_url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-tech-blue hover:underline"
+                      >
+                        Ausschreibung auf bund.de öffnen
+                      </a>
                     </p>
                   </div>
                 )}
@@ -252,7 +250,7 @@ export function TenderDetailContent({ tender, user }: TenderDetailContentProps) 
             <Card className="border-neutral-800 bg-card">
               <CardHeader className="pb-4">
                 <h2 className="text-lg font-semibold text-foreground">
-                  Anforderungen
+                  Typische Anforderungen
                 </h2>
               </CardHeader>
               <CardContent>
@@ -283,6 +281,10 @@ export function TenderDetailContent({ tender, user }: TenderDetailContentProps) 
                     </li>
                   ))}
                 </ul>
+                <p className="mt-4 text-xs text-muted-foreground">
+                  * Dies sind typische Anforderungen für öffentliche Ausschreibungen. 
+                  Bitte prüfe die genauen Anforderungen in der Original-Ausschreibung.
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -368,20 +370,35 @@ export function TenderDetailContent({ tender, user }: TenderDetailContentProps) 
                   variant="outline"
                   className="w-full border-neutral-700 hover:bg-secondary hover:border-neutral-600"
                   size="lg"
+                  asChild={tender.source_url ? true : false}
                 >
-                  <Download className="mr-2 h-4 w-4" />
-                  Ausschreibung herunterladen
+                  {tender.source_url ? (
+                    <a href={tender.source_url} target="_blank" rel="noopener noreferrer">
+                      <Download className="mr-2 h-4 w-4" />
+                      Ausschreibung herunterladen
+                    </a>
+                  ) : (
+                    <>
+                      <Download className="mr-2 h-4 w-4" />
+                      Ausschreibung herunterladen
+                    </>
+                  )}
                 </Button>
 
                 {/* External Link */}
-                <Button
-                  variant="ghost"
-                  className="w-full text-muted-foreground hover:text-foreground"
-                  size="sm"
-                >
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  Auf bund.de öffnen
-                </Button>
+                {tender.source_url && (
+                  <Button
+                    variant="ghost"
+                    className="w-full text-muted-foreground hover:text-foreground"
+                    size="sm"
+                    asChild
+                  >
+                    <a href={tender.source_url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      Auf bund.de öffnen
+                    </a>
+                  </Button>
+                )}
               </CardContent>
             </Card>
 
@@ -399,4 +416,3 @@ export function TenderDetailContent({ tender, user }: TenderDetailContentProps) 
     </>
   );
 }
-

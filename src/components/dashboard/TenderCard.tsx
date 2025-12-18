@@ -5,10 +5,23 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MapPin, Calendar, Euro, ArrowRight, Bookmark } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Tender } from "@/lib/mock-data";
+
+/**
+ * Tender data for the card
+ */
+interface TenderCardData {
+  id: string;
+  title: string;
+  location: string;
+  budget: string;
+  matchScore: number;
+  deadline: string;
+  category: string;
+  description?: string | null;
+}
 
 interface TenderCardProps {
-  tender: Tender;
+  tender: TenderCardData;
   onViewDetails?: (id: string) => void;
   onApply?: (id: string) => void;
 }
@@ -17,21 +30,17 @@ interface TenderCardProps {
  * Formats a date string to German locale
  */
 function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString("de-DE", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-/**
- * Returns badge variant based on match score
- */
-function getScoreVariant(score: number): "default" | "secondary" | "destructive" | "outline" {
-  if (score >= 90) return "default";
-  if (score >= 70) return "secondary";
-  return "outline";
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString;
+    return date.toLocaleDateString("de-DE", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  } catch {
+    return dateString;
+  }
 }
 
 /**
@@ -43,8 +52,16 @@ function getScoreColor(score: number): string {
   return "bg-neutral-500/20 text-neutral-400 border-neutral-500/30";
 }
 
+/**
+ * Truncate text to a maximum length
+ */
+function truncateText(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength).trim() + "...";
+}
+
 export function TenderCard({ tender, onViewDetails, onApply }: TenderCardProps) {
-  const { id, title, location, budget, matchScore, deadline, category } = tender;
+  const { id, title, location, budget, matchScore, deadline, category, description } = tender;
 
   return (
     <Card className="group relative overflow-hidden bg-card border-neutral-800 hover:border-neutral-700 transition-all duration-200">
@@ -55,7 +72,7 @@ export function TenderCard({ tender, onViewDetails, onApply }: TenderCardProps) 
         <div className="flex items-start justify-between gap-4">
           {/* Title & Category */}
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-foreground text-lg leading-tight truncate">
+            <h3 className="font-semibold text-foreground text-lg leading-tight line-clamp-2">
               {title}
             </h3>
             <p className="text-sm text-muted-foreground mt-1">{category}</p>
@@ -74,7 +91,14 @@ export function TenderCard({ tender, onViewDetails, onApply }: TenderCardProps) 
         </div>
       </CardHeader>
 
-      <CardContent className="relative pb-4">
+      <CardContent className="relative pb-4 space-y-3">
+        {/* Description excerpt */}
+        {description && (
+          <p className="text-sm text-muted-foreground line-clamp-2">
+            {truncateText(description, 150)}
+          </p>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {/* Location */}
           <div className="flex items-center gap-2 text-sm">
@@ -135,4 +159,3 @@ export function TenderCard({ tender, onViewDetails, onApply }: TenderCardProps) 
     </Card>
   );
 }
-
