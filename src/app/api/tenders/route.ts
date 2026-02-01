@@ -6,6 +6,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q');
+    const status = searchParams.get('status');
 
     const dbPath = path.join(process.cwd(), 'backend', 'tenders.db');
     // verbose: console.log
@@ -19,15 +20,26 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ tenders: [], count: 0 });
     }
 
-    // Fetch tenders with optional search
+    // Fetch tenders with optional search and status
     let rows;
+    let sql = 'SELECT * FROM tenders WHERE 1=1';
+    const params: any[] = [];
+
     if (query) {
-      const stmt = db.prepare('SELECT * FROM tenders WHERE title LIKE ? OR description LIKE ? ORDER BY created_at DESC');
+      sql += ' AND (title LIKE ? OR description LIKE ?)';
       const pattern = `%${query}%`;
-      rows = stmt.all(pattern, pattern);
-    } else {
-      rows = db.prepare('SELECT * FROM tenders ORDER BY created_at DESC').all();
+      params.push(pattern, pattern);
     }
+
+    if (status && status !== 'all') {
+      sql += ' AND status = ?';
+      params.push(status);
+    }
+
+    sql += ' ORDER BY created_at DESC';
+
+    const stmt = db.prepare(sql);
+    rows = stmt.all(...params);
     
     const tenders = rows.map((row: any) => {
       let details: any = {};
@@ -47,6 +59,7 @@ export async function GET(request: NextRequest) {
         budget: details.budget || "k.A.",
         deadline: details.frist || row.published_at,
         category: details.gewerk || "Allgemein",
+        status: row.status || "new",
         source_url: row.link,
         matchScore: 0 // Client side calculation or placeholder
       };

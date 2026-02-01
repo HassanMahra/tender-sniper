@@ -9,6 +9,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { TenderDetailContent } from "@/components/dashboard/TenderDetailContent";
 import type { Tender } from "@/types/database";
 
@@ -80,6 +89,7 @@ export function DashboardContent({
   const [isLoading, setIsLoading] = useState(true);
   const [selectedTender, setSelectedTender] = useState<Tender | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("all");
 
   // Use firstName if available, otherwise extract from email or use fallback
   const displayName = firstName || email.split("@")[0] || "Handwerker";
@@ -89,7 +99,12 @@ export function DashboardContent({
     async function fetchTenders() {
       try {
         setIsLoading(true);
-        const res = await fetch('/api/tenders');
+        const params = new URLSearchParams();
+        if (statusFilter !== 'all') {
+          params.append('status', statusFilter);
+        }
+        
+        const res = await fetch(`/api/tenders?${params.toString()}`);
         if (!res.ok) throw new Error('Failed to fetch tenders');
         const data = await res.json();
         setTenders(data.tenders || []);
@@ -102,7 +117,7 @@ export function DashboardContent({
     }
 
     fetchTenders();
-  }, []);
+  }, [statusFilter]);
 
   // Calculate stats
   const topMatches = tenders.filter((t) => (t.matchScore || 0) >= 90).length;
@@ -190,13 +205,33 @@ export function DashboardContent({
         </div>
 
         {/* Filter Button */}
-        <Button
-          variant="outline"
-          className="border-neutral-700 hover:bg-secondary hover:border-neutral-600"
-        >
-          <SlidersHorizontal className="mr-2 h-4 w-4" />
-          Filter
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              className="border-neutral-700 hover:bg-secondary hover:border-neutral-600"
+            >
+              <SlidersHorizontal className="mr-2 h-4 w-4" />
+              Status: {statusFilter === 'all' ? 'Alle' : 
+                       statusFilter === 'new' ? 'Neu' : 
+                       statusFilter === 'applied' ? 'Beworben' : 
+                       statusFilter === 'interested' ? 'Interessiert' :
+                       statusFilter === 'rejected' ? 'Abgelehnt' :
+                       statusFilter}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-56 bg-card border-neutral-800 text-foreground">
+            <DropdownMenuLabel>Status filtern</DropdownMenuLabel>
+            <DropdownMenuSeparator className="bg-neutral-800" />
+            <DropdownMenuRadioGroup value={statusFilter} onValueChange={setStatusFilter}>
+              <DropdownMenuRadioItem value="all">Alle anzeigen</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="new">Neu</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="applied">Beworben</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="interested">Interessiert</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="rejected">Abgelehnt</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Stats Cards */}

@@ -187,7 +187,8 @@ async def process_entry(session: aiohttp.ClientSession, model: genai.GenerativeM
         analysis_data=analysis,
         source=RSS_FEED_URL,
         published_at=published,
-        link=link
+        link=link,
+        status="new"
     )
     print(f"   ✅ Saved: {analysis.get('fazit', 'Saved')}")
 
