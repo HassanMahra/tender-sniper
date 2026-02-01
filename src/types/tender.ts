@@ -25,6 +25,7 @@ export interface ScanResponse {
   success: boolean;
   stats?: TenderScanStats;
   message?: string;
+  error?: string;
   processed?: Partial<Tender>[];
   errors?: { url?: string; error: string }[];
 }

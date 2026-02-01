@@ -115,13 +115,22 @@ export async function GET() {
           // Analyze with Gemini
           const analysis = await analyzeTenderText(textToAnalyze, geminiApiKey);
 
+          // Validate deadline
+          let parsedDeadline: string | null = null;
+          if (analysis.deadline && analysis.deadline !== "k.A.") {
+             const d = new Date(analysis.deadline);
+             if (!isNaN(d.getTime())) {
+                 parsedDeadline = analysis.deadline; // Keep original if valid, or use d.toISOString() if we want standardization
+             }
+          }
+
           // Insert into DB
           const tenderData = {
             title: item.title || "Unbekannt",
             description: analysis.description_short || null,
             location: analysis.location || null,
             budget: analysis.budget || null,
-            deadline: analysis.deadline !== "k.A." ? analysis.deadline : null,
+            deadline: parsedDeadline,
             category: analysis.category || null,
             source_url: item.link,
             published_at: item.pubDate ? new Date(item.pubDate).toISOString() : null,

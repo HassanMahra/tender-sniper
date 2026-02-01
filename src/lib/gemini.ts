@@ -56,7 +56,10 @@ Antworte NUR mit einem validen JSON-Objekt:
   const result = await model.generateContent(prompt);
   const responseText = result.response.text();
 
-  const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+  // Clean markdown code blocks if present
+  const cleanText = responseText.replace(/```json/g, "").replace(/```/g, "");
+  
+  const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
     throw new Error("Kein JSON in Gemini-Antwort gefunden");
   }
