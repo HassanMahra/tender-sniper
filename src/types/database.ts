@@ -12,6 +12,7 @@ export interface DbTender {
   category: string | null;
   source_url: string | null;
   published_at: string | null;
+  requirements: string[] | null;
   created_at: string;
   updated_at: string;
 }

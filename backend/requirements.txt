@@ -6,6 +6,7 @@ google-generativeai>=0.8.0
 
 # HTTP requests library
 requests>=2.31.0
+aiohttp>=3.9.0
 
 # RSS/Atom feed parser for bund.de feeds
 feedparser>=6.0.10

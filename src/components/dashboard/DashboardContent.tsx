@@ -2,8 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { TenderCard } from "@/components/dashboard/TenderCard";
-import { Search, SlidersHorizontal, TrendingUp, Clock, Zap, Building2, FileSearch, Settings } from "lucide-react";
+import { Search, SlidersHorizontal, TrendingUp, Clock, Zap, Building2, FileSearch, Settings, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,14 +15,11 @@ interface DashboardContentProps {
   lastName: string | null;
   companyName: string | null;
   email: string;
-  tenders: Tender[];
-  totalCount: number;
+  tenders?: Tender[]; // Made optional as we fetch internally
+  totalCount?: number;
   hasKeywords: boolean;
 }
 
-/**
- * Get greeting based on time of day
- */
 function getGreeting(): string {
   const hour = new Date().getHours();
   if (hour < 12) return "Guten Morgen";
@@ -29,9 +27,6 @@ function getGreeting(): string {
   return "Guten Abend";
 }
 
-/**
- * Calculate total budget from tenders
- */
 function calculateTotalBudget(tenders: Tender[]): string {
   const total = tenders.reduce((sum, t) => {
     const budgetStr = t.budget?.replace(/[^0-9]/g, "") || "0";
@@ -40,9 +35,6 @@ function calculateTotalBudget(tenders: Tender[]): string {
   return total.toLocaleString("de-DE");
 }
 
-/**
- * Empty state component when no tenders found
- */
 function EmptyState({ hasKeywords }: { hasKeywords: boolean }) {
   return (
     <Card className="border-neutral-800 bg-card">
@@ -76,15 +68,37 @@ export function DashboardContent({
   lastName,
   companyName,
   email,
-  tenders,
-  totalCount,
+  tenders: initialTenders = [],
+  totalCount: initialTotalCount = 0,
   hasKeywords,
 }: DashboardContentProps) {
   const router = useRouter();
+  const [tenders, setTenders] = useState<Tender[]>(initialTenders);
+  const [totalCount, setTotalCount] = useState(initialTotalCount);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Use firstName if available, otherwise extract from email or use fallback
   const displayName = firstName || email.split("@")[0] || "Handwerker";
   const greeting = getGreeting();
+
+  useEffect(() => {
+    async function fetchTenders() {
+      try {
+        setIsLoading(true);
+        const res = await fetch('/api/tenders');
+        if (!res.ok) throw new Error('Failed to fetch tenders');
+        const data = await res.json();
+        setTenders(data.tenders || []);
+        setTotalCount(data.count || 0);
+      } catch (error) {
+        console.error("Error fetching tenders:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchTenders();
+  }, []);
 
   // Calculate stats
   const topMatches = tenders.filter((t) => (t.matchScore || 0) >= 90).length;
@@ -203,7 +217,11 @@ export function DashboardContent({
       </div>
 
       {/* Content Section */}
-      {tenders.length > 0 ? (
+      {isLoading ? (
+        <div className="flex justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-signal-orange" />
+        </div>
+      ) : tenders.length > 0 ? (
         <>
           {/* Section Title */}
           <div className="mb-4 flex items-center justify-between">

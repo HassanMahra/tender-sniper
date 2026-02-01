@@ -1,6 +1,6 @@
 """
-TenderSniper - Public Tender Scraper
-=====================================
+TenderSniper - Public Tender Scraper (Async)
+============================================
 
 This module handles scraping and parsing of public tenders from bund.de
 and analyzes them using Google Gemini AI.
@@ -15,19 +15,19 @@ Author: TenderSniper Team
 import os
 import json
 import re
-from pathlib import Path
+import asyncio
+import aiohttp
 from datetime import datetime
 
 import feedparser
 import google.generativeai as genai
 
+import database
 
 # Configuration
 RSS_FEED_URL = "https://www.service.bund.de/Content/RSS/Bund/Ausschreibungen/Bauauftraege/RSS_Bauauftraege.xml"
-OUTPUT_DIR = Path(__file__).parent.parent / "src" / "data"
-OUTPUT_FILE = OUTPUT_DIR / "tenders.json"
-MAX_ENTRIES = 3
-MODEL_NAME = "gemini-2.0-flash"  # Cost-effective model
+MAX_ENTRIES = 5
+MODEL_NAME = "gemini-2.0-flash"
 
 # Gemini prompt template for tender analysis
 ANALYSIS_PROMPT = """Analysiere diese Ausschreibung. Antworte NUR mit validem JSON: { "titel": string, "budget": string (oder "k.A."), "ort": string, "frist": string, "gewerk": string, "fazit": string (max 10 Worte) }.
@@ -50,9 +50,8 @@ def setup_gemini() -> genai.GenerativeModel:
     
     genai.configure(api_key=api_key)
     
-    # Configure generation settings for JSON output
     generation_config = {
-        "temperature": 0.1,  # Low temperature for consistent JSON
+        "temperature": 0.1,
         "max_output_tokens": 500,
     }
     
@@ -62,21 +61,12 @@ def setup_gemini() -> genai.GenerativeModel:
     )
 
 
-def fetch_rss_feed(url: str) -> list[dict]:
-    """Fetch and parse RSS feed from bund.de."""
+async def fetch_feed_text(session: aiohttp.ClientSession, url: str) -> str:
+    """Fetch RSS feed content asynchronously."""
     print(f"📡 Fetching RSS feed from: {url}")
-    
-    feed = feedparser.parse(url)
-    
-    if feed.bozo:
-        # bozo flag indicates parsing errors
-        print(f"⚠️  Warning: Feed parsing had issues: {feed.bozo_exception}")
-    
-    if not feed.entries:
-        raise ValueError("No entries found in RSS feed")
-    
-    print(f"✅ Found {len(feed.entries)} entries in feed")
-    return feed.entries
+    async with session.get(url) as response:
+        response.raise_for_status()
+        return await response.text()
 
 
 def clean_html(text: str) -> str:
@@ -86,21 +76,21 @@ def clean_html(text: str) -> str:
     return clean.strip()
 
 
-def analyze_tender(model: genai.GenerativeModel, title: str, description: str) -> dict | None:
+async def analyze_tender_async(model: genai.GenerativeModel, title: str, description: str) -> dict | None:
     """
-    Send tender to Gemini for analysis and return structured data.
-    Returns None if analysis fails.
+    Send tender to Gemini for analysis asynchronously.
     """
     prompt = ANALYSIS_PROMPT.format(
         title=title,
-        description=description[:2000]  # Limit description length
+        description=description[:2000]
     )
     
     try:
-        response = model.generate_content(prompt)
+        # Async generation
+        response = await model.generate_content_async(prompt)
         response_text = response.text.strip()
         
-        # Extract JSON from response (handle markdown code blocks)
+        # Extract JSON
         if "```json" in response_text:
             json_match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
             if json_match:
@@ -110,122 +100,99 @@ def analyze_tender(model: genai.GenerativeModel, title: str, description: str) -
             if json_match:
                 response_text = json_match.group(1)
         
-        # Parse JSON response
-        result = json.loads(response_text)
-        return result
+        return json.loads(response_text)
         
-    except json.JSONDecodeError as e:
-        print(f"   ❌ JSON parsing failed: {e}")
-        print(f"   Raw response: {response_text[:200]}...")
+    except json.JSONDecodeError:
+        print(f"   ❌ JSON parsing failed for: {title[:30]}...")
         return None
     except Exception as e:
-        print(f"   ❌ Gemini API error: {e}")
+        print(f"   ❌ Analysis error: {e}")
         return None
 
 
-def save_results(results: list[dict], output_file: Path) -> None:
-    """Save analyzed tenders to JSON file."""
-    # Ensure output directory exists
-    output_file.parent.mkdir(parents=True, exist_ok=True)
+async def process_entry(session: aiohttp.ClientSession, model: genai.GenerativeModel, entry: dict):
+    """Process a single feed entry: check DB, analyze, save."""
+    title = entry.get("title", "Unbekannter Titel")
+    link = entry.get("link", "")
+    published = entry.get("published", "")
     
-    # Add metadata
-    output_data = {
-        "lastUpdated": datetime.now().isoformat(),
-        "source": RSS_FEED_URL,
-        "count": len(results),
-        "tenders": results
-    }
+    # 1. Idempotency Check
+    if database.tender_exists(link):
+        print(f"⏭️  Skipping existing: {title[:50]}...")
+        return
+
+    print(f"🔍 Analyzing: {title[:50]}...")
     
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(output_data, f, ensure_ascii=False, indent=2)
+    description = clean_html(entry.get("description", entry.get("summary", "")))
     
-    print(f"💾 Saved {len(results)} tenders to: {output_file}")
+    # 2. Analyze
+    analysis = await analyze_tender_async(model, title, description)
+    
+    if not analysis:
+        # Fallback for failed analysis
+        analysis = {
+            "fazit": "Analyse fehlgeschlagen",
+            "error": True
+        }
+    
+    # Add metadata to analysis
+    analysis["original_title"] = title
+    analysis["scraped_at"] = datetime.now().isoformat()
+    
+    # 3. Save to DB
+    database.insert_tender(
+        title=title,
+        description=description,
+        analysis_data=analysis,
+        source=RSS_FEED_URL,
+        published_at=published,
+        link=link
+    )
+    print(f"   ✅ Saved: {analysis.get('fazit', 'Saved')}")
 
 
-def main():
-    """Main scraper execution flow."""
+async def main():
     print("=" * 60)
-    print("🎯 TenderSniper - Ausschreibungs-Scraper")
+    print("🎯 TenderSniper - Async Scraper")
     print("=" * 60)
-    print()
     
-    # Step 1: Setup Gemini
+    # Setup
     try:
-        print("🤖 Setting up Gemini AI...")
+        database.init_db()
         model = setup_gemini()
-        print(f"✅ Using model: {MODEL_NAME}")
-        print()
     except ValueError as e:
         print(f"❌ Setup failed: {e}")
         return
-    
-    # Step 2: Fetch RSS feed
-    try:
-        entries = fetch_rss_feed(RSS_FEED_URL)
-    except Exception as e:
-        print(f"❌ Failed to fetch RSS feed: {e}")
-        return
-    
-    # Step 3: Process first N entries
-    print()
-    print(f"📊 Analyzing top {MAX_ENTRIES} entries...")
-    print("-" * 40)
-    
-    results = []
-    
-    for i, entry in enumerate(entries[:MAX_ENTRIES], start=1):
-        title = entry.get("title", "Unbekannter Titel")
-        description = clean_html(entry.get("description", entry.get("summary", "")))
-        link = entry.get("link", "")
-        published = entry.get("published", "")
-        
-        print(f"\n[{i}/{MAX_ENTRIES}] {title[:60]}...")
-        print(f"   📅 Published: {published}")
-        
-        # Analyze with Gemini
-        analysis = analyze_tender(model, title, description)
-        
-        if analysis:
-            print(f"   ✅ Analysis complete")
-            print(f"   📍 Ort: {analysis.get('ort', 'k.A.')}")
-            print(f"   💶 Budget: {analysis.get('budget', 'k.A.')}")
-            print(f"   🔧 Gewerk: {analysis.get('gewerk', 'k.A.')}")
-            
-            # Add source metadata
-            analysis["source_url"] = link
-            analysis["published"] = published
-            analysis["scraped_at"] = datetime.now().isoformat()
-            
-            results.append(analysis)
-        else:
-            print(f"   ⚠️  Skipping entry due to analysis failure")
-            # Still save basic info even if analysis failed
-            results.append({
-                "titel": title,
-                "budget": "k.A.",
-                "ort": "k.A.",
-                "frist": "k.A.",
-                "gewerk": "k.A.",
-                "fazit": "Analyse fehlgeschlagen",
-                "source_url": link,
-                "published": published,
-                "scraped_at": datetime.now().isoformat(),
-                "error": True
-            })
-    
-    # Step 4: Save results
-    print()
-    print("-" * 40)
-    
-    if results:
-        save_results(results, OUTPUT_FILE)
-    else:
-        print("❌ No results to save")
-    
-    print()
-    print("✨ Scraping complete!")
-    print("=" * 60)
 
+    # Fetch
+    async with aiohttp.ClientSession() as session:
+        try:
+            xml_text = await fetch_feed_text(session, RSS_FEED_URL)
+            feed = feedparser.parse(xml_text)
+            
+            if not feed.entries:
+                print("❌ No entries found.")
+                return
+                
+            print(f"✅ Found {len(feed.entries)} entries.")
+            print("-" * 40)
+            
+            # Process entries
+            # We process them sequentially or in parallel? 
+            # Parallel is faster but might hit rate limits. 
+            # Let's do a semaphore if needed, but for MAX_ENTRIES=5, gather is fine.
+            
+            tasks = []
+            for entry in feed.entries[:MAX_ENTRIES]:
+                tasks.append(process_entry(session, model, entry))
+            
+            await asyncio.gather(*tasks)
+
+        except Exception as e:
+            print(f"❌ Error during execution: {e}")
+
+    print("-" * 40)
+    print("✨ Done.")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
