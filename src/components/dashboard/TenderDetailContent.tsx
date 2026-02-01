@@ -22,7 +22,10 @@ import {
   AlertCircle,
   FileText,
   ExternalLink,
+  Trash2,
+  Loader2,
 } from "lucide-react";
+import { toast } from "sonner";
 
 interface UserInfo {
   firstName: string | null;
@@ -35,6 +38,7 @@ interface TenderDetailContentProps {
   tender: Tender | null;
   user: UserInfo;
   isModal?: boolean;
+  onDelete?: (id: string) => void;
 }
 
 /**
@@ -126,9 +130,10 @@ function TenderNotFound() {
   );
 }
 
-export function TenderDetailContent({ tender, user, isModal = false }: TenderDetailContentProps) {
+export function TenderDetailContent({ tender, user, isModal = false, onDelete }: TenderDetailContentProps) {
   const router = useRouter();
   const [applicationDialogOpen, setApplicationDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Show 404 if tender not found
   if (!tender) {
@@ -138,6 +143,29 @@ export function TenderDetailContent({ tender, user, isModal = false }: TenderDet
   const daysLeft = getDaysUntilDeadline(tender.deadline);
   const matchScore = tender.matchScore || 50;
   const status = tender.status || "New";
+
+  const handleDelete = async () => {
+    if (!tender) return;
+
+    if (onDelete) {
+      onDelete(tender.id);
+    } else {
+      if (!confirm("Möchtest du diese Ausschreibung wirklich löschen?")) return;
+      
+      try {
+        setIsDeleting(true);
+        const res = await fetch(`/api/tenders/${tender.id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Failed to delete');
+        toast.success("Ausschreibung gelöscht");
+        router.push('/dashboard');
+        router.refresh();
+      } catch (e) {
+        console.error(e);
+        toast.error("Fehler beim Löschen");
+        setIsDeleting(false);
+      }
+    }
+  };
 
   return (
     <>
@@ -190,6 +218,16 @@ export function TenderDetailContent({ tender, user, isModal = false }: TenderDet
 
             {/* Right Side: Badge & Deadline */}
             <div className="flex flex-wrap items-center gap-3 lg:flex-col lg:items-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 mb-2"
+                onClick={handleDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                Löschen
+              </Button>
               <div className="flex items-center gap-2">
                  <Badge
                   variant="outline"

@@ -1,86 +1,51 @@
 import { NextResponse, NextRequest } from 'next/server';
-import Database from 'better-sqlite3';
-import path from 'path';
-
-// Define the interface for a database row
-interface TenderRow {
-  id: number;
-  title: string;
-  description: string;
-  full_text?: string;
-  analysis_json: string;
-  source: string;
-  published_at: string;
-  link: string;
-  status: string;
-  created_at: string;
-}
+import { createClient } from '@/utils/supabase/server';
+import { mapDbTenderToTender } from '@/types/database';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q');
     const status = searchParams.get('status');
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '10');
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
 
-    const dbPath = path.join(process.cwd(), 'backend', 'tenders.db');
-    // verbose: console.log
-    const db = new Database(dbPath);
+    const supabase = await createClient();
 
-    // Check if table exists
-    const tableCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='tenders'").get();
-    
-    if (!tableCheck) {
-      db.close();
-      return NextResponse.json({ tenders: [], count: 0 });
-    }
+    // Start building the query
+    let supabaseQuery = supabase
+      .from('tenders')
+      .select('*', { count: 'exact' });
 
-    // Fetch tenders with optional search and status
-    let sql = 'SELECT * FROM tenders WHERE 1=1';
-    const params: (string | number)[] = [];
-
+    // Apply filters
     if (query) {
-      sql += ' AND (title LIKE ? OR description LIKE ?)';
-      const pattern = `%${query}%`;
-      params.push(pattern, pattern);
+      // Basic search on title or description
+      // Note: textSearch or ilike can be used depending on DB setup. 
+      // Using ilike for broad compatibility if full text search isn't set up.
+      supabaseQuery = supabaseQuery.or(`title.ilike.%${query}%,description.ilike.%${query}%`);
     }
 
     if (status && status !== 'all') {
-      sql += ' AND status = ?';
-      params.push(status);
+      supabaseQuery = supabaseQuery.eq('status', status);
     }
 
-    sql += ' ORDER BY created_at DESC';
+    // Apply pagination and sorting
+    supabaseQuery = supabaseQuery
+      .order('created_at', { ascending: false })
+      .range(from, to);
 
-    const stmt = db.prepare(sql);
-    const rows = stmt.all(...params) as TenderRow[];
-    
-    const tenders = rows.map((row) => {
-      let details: Record<string, unknown> = {};
-      try {
-        if (row.analysis_json) {
-          details = JSON.parse(row.analysis_json);
-        }
-      } catch {
-        // ignore parse error
-      }
+    const { data: rows, error, count } = await supabaseQuery;
 
-      return {
-        id: row.id.toString(),
-        title: row.title,
-        description: row.description,
-        location: (details.ort as string) || "Deutschland",
-        budget: (details.budget as string) || "k.A.",
-        deadline: (details.frist as string) || row.published_at,
-        category: (details.gewerk as string) || "Allgemein",
-        status: row.status || "new",
-        source_url: row.link,
-        matchScore: 0 // Client side calculation or placeholder
-      };
-    });
+    if (error) {
+      console.error("Supabase Error:", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
 
-    db.close();
+    const tenders = (rows || []).map(mapDbTenderToTender);
 
-    return NextResponse.json({ tenders, count: tenders.length });
+    return NextResponse.json({ tenders, count: count || 0 });
   } catch (error: unknown) {
     console.error("API Error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";

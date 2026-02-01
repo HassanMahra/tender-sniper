@@ -3,7 +3,7 @@
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MapPin, Calendar, Euro, ArrowRight, Bookmark } from "lucide-react";
+import { MapPin, Calendar, Euro, ArrowRight, Bookmark, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -24,20 +24,23 @@ interface TenderCardProps {
   tender: TenderCardData;
   onViewDetails?: (id: string) => void;
   onApply?: (id: string) => void;
+  onDelete?: (id: string) => void;
 }
 
 /**
  * Formats a date string to German locale
  */
+const dateFormatter = new Intl.DateTimeFormat("de-DE", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+});
+
 function formatDate(dateString: string): string {
   try {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return dateString;
-    return date.toLocaleDateString("de-DE", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
+    return dateFormatter.format(date);
   } catch {
     return dateString;
   }
@@ -52,15 +55,7 @@ function getScoreColor(score: number): string {
   return "bg-neutral-500/20 text-neutral-400 border-neutral-500/30";
 }
 
-/**
- * Truncate text to a maximum length
- */
-function truncateText(text: string, maxLength: number): string {
-  if (text.length <= maxLength) return text;
-  return text.slice(0, maxLength).trim() + "...";
-}
-
-export function TenderCard({ tender, onViewDetails, onApply }: TenderCardProps) {
+export function TenderCard({ tender, onViewDetails, onApply, onDelete }: TenderCardProps) {
   const { id, title, location, budget, matchScore, deadline, category, description } = tender;
 
   return (
@@ -72,7 +67,7 @@ export function TenderCard({ tender, onViewDetails, onApply }: TenderCardProps) 
         <div className="flex items-start justify-between gap-4">
           {/* Title & Category */}
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-foreground text-lg leading-tight line-clamp-2">
+            <h3 className="font-semibold text-foreground text-lg leading-tight line-clamp-2" title={title}>
               {title}
             </h3>
             <p className="text-sm text-muted-foreground mt-1">{category}</p>
@@ -94,8 +89,8 @@ export function TenderCard({ tender, onViewDetails, onApply }: TenderCardProps) 
       <CardContent className="relative pb-4 space-y-3">
         {/* Description excerpt */}
         {description && (
-          <p className="text-sm text-muted-foreground line-clamp-2">
-            {truncateText(description, 150)}
+          <p className="text-sm text-muted-foreground line-clamp-2" title={description}>
+            {description}
           </p>
         )}
 
@@ -103,7 +98,7 @@ export function TenderCard({ tender, onViewDetails, onApply }: TenderCardProps) 
           {/* Location */}
           <div className="flex items-center gap-2 text-sm">
             <MapPin className="h-4 w-4 text-tech-blue shrink-0" />
-            <span className="text-muted-foreground truncate">{location}</span>
+            <span className="text-muted-foreground truncate" title={location}>{location}</span>
           </div>
 
           {/* Deadline */}
@@ -116,9 +111,9 @@ export function TenderCard({ tender, onViewDetails, onApply }: TenderCardProps) 
           <div className="flex items-center gap-2 text-sm">
             <Euro className="h-4 w-4 text-tech-blue shrink-0" />
             <span className={cn(
-              "font-medium",
+              "font-medium truncate",
               budget === "k.A." ? "text-muted-foreground" : "text-foreground"
-            )}>
+            )} title={budget}>
               {budget}
             </span>
           </div>
@@ -126,15 +121,28 @@ export function TenderCard({ tender, onViewDetails, onApply }: TenderCardProps) 
       </CardContent>
 
       <CardFooter className="relative pt-0 justify-end gap-2">
-        {/* Save Button (Icon only) */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-secondary mr-auto"
-          aria-label="Speichern"
-        >
-          <Bookmark className="h-4 w-4" />
-        </Button>
+        <div className="flex gap-1 mr-auto">
+          {/* Save Button (Icon only) */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-secondary"
+            aria-label="Speichern"
+          >
+            <Bookmark className="h-4 w-4" />
+          </Button>
+          
+          {/* Delete Button (Icon only) */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            aria-label="Löschen"
+            onClick={() => onDelete?.(id)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
 
         {/* View Details Button */}
         <Button

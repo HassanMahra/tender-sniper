@@ -137,9 +137,11 @@ export function Sidebar({ firstName, lastName, companyName, email }: SidebarProp
               {item.icon}
               {item.label}
               {item.label === "Feed" && (
-                <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-signal-orange px-1.5 text-xs font-semibold text-white">
+                /* TODO: Connect to real unread count */
+                /* <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-signal-orange px-1.5 text-xs font-semibold text-white">
                   5
-                </span>
+                </span> */
+                null
               )}
             </Link>
           );

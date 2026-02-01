@@ -8,7 +8,7 @@ import { Search, SlidersHorizontal, TrendingUp, Clock, Zap, Building2, FileSearc
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { TenderDetailContent } from "@/components/dashboard/TenderDetailContent";
 import type { Tender } from "@/types/database";
+import { toast } from "sonner";
 
 interface DashboardContentProps {
   firstName: string | null;
@@ -90,34 +91,57 @@ export function DashboardContent({
   const [selectedTender, setSelectedTender] = useState<Tender | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const LIMIT = 10;
+
+  // Delete confirmation state
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [tenderToDelete, setTenderToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Use firstName if available, otherwise extract from email or use fallback
   const displayName = firstName || email.split("@")[0] || "Handwerker";
   const greeting = getGreeting();
 
-  useEffect(() => {
-    async function fetchTenders() {
-      try {
-        setIsLoading(true);
-        const params = new URLSearchParams();
-        if (statusFilter !== 'all') {
-          params.append('status', statusFilter);
-        }
-        
-        const res = await fetch(`/api/tenders?${params.toString()}`);
-        if (!res.ok) throw new Error('Failed to fetch tenders');
-        const data = await res.json();
-        setTenders(data.tenders || []);
-        setTotalCount(data.count || 0);
-      } catch (error) {
-        console.error("Error fetching tenders:", error);
-      } finally {
-        setIsLoading(false);
+  const fetchTenders = async (pageNum: number, append: boolean = false) => {
+    try {
+      if (!append) setIsLoading(true);
+      const params = new URLSearchParams();
+      params.append('page', pageNum.toString());
+      params.append('limit', LIMIT.toString());
+      if (statusFilter !== 'all') {
+        params.append('status', statusFilter);
       }
+      
+      const res = await fetch(`/api/tenders?${params.toString()}`);
+      if (!res.ok) throw new Error('Failed to fetch tenders');
+      const data = await res.json();
+      
+      if (append) {
+        setTenders(prev => [...prev, ...(data.tenders || [])]);
+      } else {
+        setTenders(data.tenders || []);
+      }
+      setTotalCount(data.count || 0);
+    } catch (error) {
+      console.error("Error fetching tenders:", error);
+      toast.error("Fehler beim Laden der Ausschreibungen");
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    fetchTenders();
+  useEffect(() => {
+    setPage(1);
+    fetchTenders(1, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
+
+  const handleLoadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchTenders(nextPage, true);
+  };
 
   // Calculate stats
   const topMatches = tenders.filter((t) => (t.matchScore || 0) >= 90).length;
@@ -138,8 +162,67 @@ export function DashboardContent({
     router.push(`/dashboard/tenders/${id}?action=apply`);
   };
 
+  const openDeleteConfirm = (id: string) => {
+    setTenderToDelete(id);
+    setDeleteConfirmOpen(true);
+  };
+
+  const executeDelete = async () => {
+    if (!tenderToDelete) return;
+
+    try {
+      setIsDeleting(true);
+      const res = await fetch(`/api/tenders/${tenderToDelete}`, {
+        method: 'DELETE',
+      });
+      
+      if (!res.ok) {
+        throw new Error('Failed to delete tender');
+      }
+
+      setTenders((prev) => prev.filter((t) => t.id !== tenderToDelete));
+      setTotalCount((prev) => prev - 1);
+      toast.success("Ausschreibung erfolgreich gelöscht");
+      setDeleteConfirmOpen(false);
+    } catch (error) {
+      console.error("Error deleting tender:", error);
+      toast.error("Fehler beim Löschen der Ausschreibung");
+    } finally {
+      setIsDeleting(false);
+      setTenderToDelete(null);
+    }
+  };
+
   return (
     <div className="p-6 lg:p-8">
+      {/* Delete Confirmation Modal */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="sm:max-w-md border-neutral-800 bg-card text-foreground">
+          <DialogHeader>
+            <DialogTitle>Ausschreibung löschen?</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Möchtest du diese Ausschreibung wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <DialogClose asChild>
+              <Button variant="outline" className="border-neutral-700 hover:bg-neutral-800">
+                Abbrechen
+              </Button>
+            </DialogClose>
+            <Button 
+              variant="destructive" 
+              onClick={executeDelete}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Löschen
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Detail Modal */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
         <DialogContent className="max-w-5xl h-[90vh] overflow-y-auto p-0 border-neutral-800 bg-background">
@@ -148,6 +231,7 @@ export function DashboardContent({
                tender={selectedTender} 
                user={{ firstName, lastName, companyName, email }}
                isModal={true}
+               onDelete={openDeleteConfirm}
              />
           )}
         </DialogContent>
@@ -276,7 +360,7 @@ export function DashboardContent({
       </div>
 
       {/* Content Section */}
-      {isLoading ? (
+      {isLoading && tenders.length === 0 ? (
         <div className="flex justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-signal-orange" />
         </div>
@@ -285,7 +369,7 @@ export function DashboardContent({
           {/* Section Title */}
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-foreground">
-              Aktuelle Chancen für dich ({tenders.length})
+              Aktuelle Chancen für dich ({tenders.length} von {totalCount})
             </h2>
             <Button variant="ghost" className="text-sm text-muted-foreground hover:text-foreground">
               Alle anzeigen
@@ -309,6 +393,7 @@ export function DashboardContent({
                 }}
                 onViewDetails={handleViewDetails}
                 onApply={handleApply}
+                onDelete={openDeleteConfirm}
               />
             ))}
           </div>
@@ -319,7 +404,10 @@ export function DashboardContent({
               <Button
                 variant="outline"
                 className="border-neutral-700 hover:bg-secondary hover:border-neutral-600"
+                onClick={handleLoadMore}
+                disabled={isLoading}
               >
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Mehr laden ({totalCount - tenders.length} weitere)
               </Button>
             </div>
