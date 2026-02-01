@@ -113,3 +113,4 @@ AUFGABEN:
     console.error("Gemini Analysis Error:", error);
     throw new Error(`Failed to analyze text: ${error instanceof Error ? error.message : String(error)}`);
   }
+}
