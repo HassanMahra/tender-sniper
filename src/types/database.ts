@@ -40,6 +40,8 @@ export interface Tender {
   category: string;
   source_url: string | null;
   matchScore?: number;
+  created_at?: string;
+  status?: "New" | "Viewed" | "Applied" | "Saved";
 }
 
 /**
@@ -55,6 +57,8 @@ export function mapDbTenderToTender(dbTender: DbTender): Tender {
     deadline: dbTender.deadline || new Date().toISOString(),
     category: dbTender.category || "Allgemein",
     source_url: dbTender.source_url,
+    created_at: dbTender.created_at,
+    status: "New", // Default to New for now
   };
 }
 

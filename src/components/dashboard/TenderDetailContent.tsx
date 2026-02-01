@@ -34,6 +34,7 @@ interface UserInfo {
 interface TenderDetailContentProps {
   tender: Tender | null;
   user: UserInfo;
+  isModal?: boolean;
 }
 
 /**
@@ -60,6 +61,19 @@ function getScoreColor(score: number): string {
   if (score >= 90) return "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
   if (score >= 70) return "bg-amber-500/20 text-amber-400 border-amber-500/30";
   return "bg-neutral-500/20 text-neutral-400 border-neutral-500/30";
+}
+
+/**
+ * Returns status color class
+ */
+function getStatusColor(status?: string): string {
+  switch (status) {
+    case "New": return "bg-blue-500/20 text-blue-400 border-blue-500/30";
+    case "Viewed": return "bg-neutral-500/20 text-neutral-400 border-neutral-500/30";
+    case "Applied": return "bg-signal-orange/20 text-signal-orange border-signal-orange/30";
+    case "Saved": return "bg-purple-500/20 text-purple-400 border-purple-500/30";
+    default: return "bg-neutral-500/20 text-neutral-400 border-neutral-500/30";
+  }
 }
 
 /**
@@ -112,7 +126,7 @@ function TenderNotFound() {
   );
 }
 
-export function TenderDetailContent({ tender, user }: TenderDetailContentProps) {
+export function TenderDetailContent({ tender, user, isModal = false }: TenderDetailContentProps) {
   const router = useRouter();
   const [applicationDialogOpen, setApplicationDialogOpen] = useState(false);
 
@@ -123,6 +137,7 @@ export function TenderDetailContent({ tender, user }: TenderDetailContentProps) 
 
   const daysLeft = getDaysUntilDeadline(tender.deadline);
   const matchScore = tender.matchScore || 50;
+  const status = tender.status || "New";
 
   return (
     <>
@@ -142,18 +157,20 @@ export function TenderDetailContent({ tender, user }: TenderDetailContentProps) 
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex-1">
               {/* Back Button */}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="mb-4 -ml-2 text-muted-foreground hover:text-foreground"
-                onClick={() => router.back()}
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Zurück
-              </Button>
+              {!isModal && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mb-4 -ml-2 text-muted-foreground hover:text-foreground"
+                  onClick={() => router.back()}
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Zurück
+                </Button>
+              )}
 
               {/* Title */}
-              <h1 className="text-2xl font-bold text-foreground lg:text-3xl">
+              <h1 className={cn("font-bold text-foreground", isModal ? "text-xl pr-8" : "text-2xl lg:text-3xl")}>
                 {tender.title}
               </h1>
 
@@ -173,15 +190,26 @@ export function TenderDetailContent({ tender, user }: TenderDetailContentProps) 
 
             {/* Right Side: Badge & Deadline */}
             <div className="flex flex-wrap items-center gap-3 lg:flex-col lg:items-end">
-              <Badge
-                variant="outline"
-                className={cn(
-                  "text-sm font-semibold tabular-nums px-3 py-1",
-                  getScoreColor(matchScore)
-                )}
-              >
-                {matchScore}% Match
-              </Badge>
+              <div className="flex items-center gap-2">
+                 <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-sm font-semibold tabular-nums px-3 py-1",
+                    getStatusColor(status)
+                  )}
+                >
+                  {status === "New" ? "Neu" : status}
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-sm font-semibold tabular-nums px-3 py-1",
+                    getScoreColor(matchScore)
+                  )}
+                >
+                  {matchScore}% Match
+                </Badge>
+              </div>
               <div
                 className={cn(
                   "flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium",

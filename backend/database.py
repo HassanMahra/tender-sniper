@@ -13,6 +13,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT,
             description TEXT,
+            full_text TEXT,
             analysis_json TEXT,
             source TEXT,
             published_at TEXT,
@@ -20,6 +21,14 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    
+    # Simple migration: try adding column if it doesn't exist
+    try:
+        c.execute("ALTER TABLE tenders ADD COLUMN full_text TEXT")
+    except sqlite3.OperationalError:
+        # Column likely already exists
+        pass
+        
     conn.commit()
     conn.close()
 
@@ -32,7 +41,7 @@ def tender_exists(link: str) -> bool:
     conn.close()
     return exists
 
-def insert_tender(title: str, description: str, analysis_data: dict, source: str, published_at: str, link: str):
+def insert_tender(title: str, description: str, analysis_data: dict, source: str, published_at: str, link: str, full_text: str = ""):
     """Insert a new tender into the database."""
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -42,9 +51,9 @@ def insert_tender(title: str, description: str, analysis_data: dict, source: str
     
     try:
         c.execute('''
-            INSERT INTO tenders (title, description, analysis_json, source, published_at, link)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (title, description, analysis_json, source, published_at, link))
+            INSERT INTO tenders (title, description, full_text, analysis_json, source, published_at, link)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (title, description, full_text, analysis_json, source, published_at, link))
         conn.commit()
         # print(f"💾 Saved to DB: {title[:30]}...")
     except sqlite3.IntegrityError:

@@ -30,11 +30,11 @@ MAX_ENTRIES = 5
 MODEL_NAME = "gemini-2.0-flash"
 
 # Gemini prompt template for tender analysis
-ANALYSIS_PROMPT = """Analysiere diese Ausschreibung. Antworte NUR mit validem JSON: { "titel": string, "budget": string (oder "k.A."), "ort": string, "frist": string, "gewerk": string, "fazit": string (max 10 Worte) }.
+ANALYSIS_PROMPT = """Analysiere diese Ausschreibung basierend auf dem vollständigen Text. Antworte NUR mit validem JSON: { "titel": string, "budget": string (oder "k.A."), "ort": string, "frist": string, "gewerk": string, "fazit": string (max 10 Worte) }.
 
 Titel: {title}
 
-Beschreibung: {description}
+Vollständiger Text: {full_text}
 """
 
 
@@ -69,6 +69,35 @@ async def fetch_feed_text(session: aiohttp.ClientSession, url: str) -> str:
         return await response.text()
 
 
+async def fetch_full_text(session: aiohttp.ClientSession, url: str) -> str:
+    """Fetch and extract full text from the tender URL."""
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+        async with session.get(url, headers=headers, timeout=15) as response:
+            if response.status != 200:
+                print(f"⚠️  HTTP {response.status} for {url}")
+                return ""
+            html = await response.text()
+            
+            # Remove scripts and styles
+            clean = re.sub(r'<script\b[^>]*>([\s\S]*?)</script>', '', html, flags=re.IGNORECASE)
+            clean = re.sub(r'<style\b[^>]*>([\s\S]*?)</style>', '', clean, flags=re.IGNORECASE)
+            clean = re.sub(r'<!--[\s\S]*?-->', '', clean)
+            
+            # Remove HTML tags
+            clean = re.sub(r'<[^>]+>', ' ', clean)
+            
+            # Collapse whitespace
+            clean = re.sub(r'\s+', ' ', clean).strip()
+            
+            return clean
+    except Exception as e:
+        print(f"⚠️  Failed to fetch deep content for {url}: {e}")
+        return ""
+
+
 def clean_html(text: str) -> str:
     """Remove HTML tags from text."""
     clean = re.sub(r'<[^>]+>', '', text)
@@ -76,13 +105,14 @@ def clean_html(text: str) -> str:
     return clean.strip()
 
 
-async def analyze_tender_async(model: genai.GenerativeModel, title: str, description: str) -> dict | None:
+async def analyze_tender_async(model: genai.GenerativeModel, title: str, full_text: str) -> dict | None:
     """
     Send tender to Gemini for analysis asynchronously.
     """
+    # Gemini 2.0 Flash has a large context window
     prompt = ANALYSIS_PROMPT.format(
         title=title,
-        description=description[:2000]
+        full_text=full_text[:20000] 
     )
     
     try:
@@ -125,8 +155,18 @@ async def process_entry(session: aiohttp.ClientSession, model: genai.GenerativeM
     
     description = clean_html(entry.get("description", entry.get("summary", "")))
     
+    # 1.5 Deep Scraping
+    full_text = ""
+    if link:
+        print(f"   ⬇️  Deep scraping: {link}")
+        full_text = await fetch_full_text(session, link)
+    
+    if not full_text:
+        full_text = description
+        print("   ⚠️  Using summary description as full text.")
+
     # 2. Analyze
-    analysis = await analyze_tender_async(model, title, description)
+    analysis = await analyze_tender_async(model, title, full_text)
     
     if not analysis:
         # Fallback for failed analysis
@@ -143,6 +183,7 @@ async def process_entry(session: aiohttp.ClientSession, model: genai.GenerativeM
     database.insert_tender(
         title=title,
         description=description,
+        full_text=full_text,
         analysis_data=analysis,
         source=RSS_FEED_URL,
         published_at=published,
@@ -153,7 +194,7 @@ async def process_entry(session: aiohttp.ClientSession, model: genai.GenerativeM
 
 async def main():
     print("=" * 60)
-    print("🎯 TenderSniper - Async Scraper")
+    print("🎯 TenderSniper - Async Scraper (Deep Mode)")
     print("=" * 60)
     
     # Setup
@@ -176,11 +217,6 @@ async def main():
                 
             print(f"✅ Found {len(feed.entries)} entries.")
             print("-" * 40)
-            
-            # Process entries
-            # We process them sequentially or in parallel? 
-            # Parallel is faster but might hit rate limits. 
-            # Let's do a semaphore if needed, but for MAX_ENTRIES=5, gather is fine.
             
             tasks = []
             for entry in feed.entries[:MAX_ENTRIES]:

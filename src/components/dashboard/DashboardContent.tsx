@@ -8,6 +8,8 @@ import { Search, SlidersHorizontal, TrendingUp, Clock, Zap, Building2, FileSearc
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { TenderDetailContent } from "@/components/dashboard/TenderDetailContent";
 import type { Tender } from "@/types/database";
 
 interface DashboardContentProps {
@@ -76,6 +78,8 @@ export function DashboardContent({
   const [tenders, setTenders] = useState<Tender[]>(initialTenders);
   const [totalCount, setTotalCount] = useState(initialTotalCount);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedTender, setSelectedTender] = useState<Tender | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   // Use firstName if available, otherwise extract from email or use fallback
   const displayName = firstName || email.split("@")[0] || "Handwerker";
@@ -105,7 +109,14 @@ export function DashboardContent({
   const totalBudget = calculateTotalBudget(tenders);
 
   const handleViewDetails = (id: string) => {
-    router.push(`/dashboard/tenders/${id}`);
+    const tender = tenders.find(t => t.id === id);
+    if (tender) {
+      setSelectedTender(tender);
+      setIsDetailOpen(true);
+    } else {
+       // Fallback to route if not found in current list (should not happen in this view)
+       router.push(`/dashboard/tenders/${id}`);
+    }
   };
 
   const handleApply = (id: string) => {
@@ -114,6 +125,19 @@ export function DashboardContent({
 
   return (
     <div className="p-6 lg:p-8">
+      {/* Detail Modal */}
+      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <DialogContent className="max-w-5xl h-[90vh] overflow-y-auto p-0 border-neutral-800 bg-background">
+          {selectedTender && (
+             <TenderDetailContent 
+               tender={selectedTender} 
+               user={{ firstName, lastName, companyName, email }}
+               isModal={true}
+             />
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Header */}
       <header className="mb-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
