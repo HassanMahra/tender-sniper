@@ -78,7 +78,7 @@ function HeroSection() {
         </div>
 
         {/* Dashboard Preview */}
-        <div className="relative mx-auto mt-16 max-w-5xl">
+        <div id="demo" className="relative mx-auto mt-16 max-w-5xl">
           <div className="glow-border rounded-2xl">
             <div
               className={cn(

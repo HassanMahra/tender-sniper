@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { signIn, signUp } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,11 +11,14 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Crosshair, Mail, Lock, ArrowRight, Loader2, CheckCircle2, User, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export default function LoginPage() {
+function LoginForm() {
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setMode] = useState<"login" | "signup">(
+    searchParams.get("mode") === "signup" ? "signup" : "login"
+  );
 
   const handleSubmit = async (formData: FormData) => {
     setIsLoading(true);
@@ -39,25 +43,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
-      {/* Background Effects */}
-      <div className="fixed inset-0 bg-grid opacity-30 pointer-events-none" />
-      <div className="fixed top-1/4 left-1/4 w-[500px] h-[500px] bg-signal-orange/5 rounded-full blur-[120px] pointer-events-none" />
-      <div className="fixed bottom-1/4 right-1/4 w-[400px] h-[400px] bg-tech-blue/5 rounded-full blur-[100px] pointer-events-none" />
-
-      {/* Logo */}
-      <Link
-        href="/"
-        className="relative flex items-center gap-2 text-2xl font-bold tracking-tight text-foreground mb-8"
-      >
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-signal-orange">
-          <Crosshair className="h-6 w-6 text-white" />
-        </div>
-        <span>
-          Tender<span className="text-signal-orange">Sniper</span>
-        </span>
-      </Link>
-
+    <>
       {/* Login Card */}
       <Card className="relative w-full max-w-md bg-card border-neutral-800">
         <CardHeader className="text-center">
@@ -259,6 +245,34 @@ export default function LoginPage() {
           </CardFooter>
         </form>
       </Card>
+    </>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+      {/* Background Effects */}
+      <div className="fixed inset-0 bg-grid opacity-30 pointer-events-none" />
+      <div className="fixed top-1/4 left-1/4 w-[500px] h-[500px] bg-signal-orange/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="fixed bottom-1/4 right-1/4 w-[400px] h-[400px] bg-tech-blue/5 rounded-full blur-[100px] pointer-events-none" />
+
+      {/* Logo */}
+      <Link
+        href="/"
+        className="relative flex items-center gap-2 text-2xl font-bold tracking-tight text-foreground mb-8"
+      >
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-signal-orange">
+          <Crosshair className="h-6 w-6 text-white" />
+        </div>
+        <span>
+          Tender<span className="text-signal-orange">Sniper</span>
+        </span>
+      </Link>
+
+      <Suspense fallback={<div className="text-muted-foreground">Lade...</div>}>
+        <LoginForm />
+      </Suspense>
 
       {/* Footer */}
       <p className="relative mt-8 text-sm text-muted-foreground">
