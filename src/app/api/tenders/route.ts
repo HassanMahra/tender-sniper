@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q');
     const status = searchParams.get('status');
+    const showAll = searchParams.get('showAll') === 'true';
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
     const from = (page - 1) * limit;
@@ -14,16 +15,45 @@ export async function GET(request: NextRequest) {
 
     const supabase = await createClient();
 
+    // Get user settings for keyword filtering (unless showAll is true)
+    let keywords: string[] = [];
+    
+    if (!showAll) {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        const { data: userSettings } = await supabase
+          .from('user_settings')
+          .select('keywords')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (userSettings?.keywords) {
+          keywords = userSettings.keywords
+            .split(',')
+            .map((k: string) => k.trim().toLowerCase())
+            .filter(Boolean);
+        }
+      }
+    }
+
     // Start building the query
     let supabaseQuery = supabase
       .from('tenders')
       .select('*', { count: 'exact' });
 
-    // Apply filters
+    // Apply keyword filter if we have keywords and not showing all
+    if (!showAll && keywords.length > 0) {
+      const orConditions = keywords
+        .map((keyword: string) => 
+          `title.ilike.%${keyword}%,description.ilike.%${keyword}%,category.ilike.%${keyword}%`
+        )
+        .join(',');
+      supabaseQuery = supabaseQuery.or(orConditions);
+    }
+
+    // Apply text search filter
     if (query) {
-      // Basic search on title or description
-      // Note: textSearch or ilike can be used depending on DB setup. 
-      // Using ilike for broad compatibility if full text search isn't set up.
       supabaseQuery = supabaseQuery.or(`title.ilike.%${query}%,description.ilike.%${query}%`);
     }
 
@@ -43,7 +73,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const tenders = (rows || []).map(mapDbTenderToTender);
+    // Calculate match scores if we have keywords
+    const tenders = (rows || []).map(row => {
+      const tender = mapDbTenderToTender(row);
+      if (keywords.length > 0) {
+        const searchText = `${row.title} ${row.description || ''} ${row.category || ''}`.toLowerCase();
+        let matches = 0;
+        for (const keyword of keywords) {
+          if (searchText.includes(keyword)) {
+            matches++;
+          }
+        }
+        tender.matchScore = Math.min(60 + (matches / keywords.length) * 38, 98);
+      }
+      return tender;
+    });
 
     return NextResponse.json({ tenders, count: count || 0 });
   } catch (error: unknown) {

@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
 import { TenderCard } from "@/components/dashboard/TenderCard";
-import { Search, SlidersHorizontal, TrendingUp, Clock, Zap, Building2, FileSearch, Settings, Loader2 } from "lucide-react";
+import { WelcomeModal } from "@/components/dashboard/WelcomeModal";
+import { Search, SlidersHorizontal, TrendingUp, Clock, Zap, Building2, FileSearch, Settings, Loader2, ListFilter, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -47,7 +48,13 @@ function calculateTotalBudget(tenders: Tender[]): string {
   return total.toLocaleString("de-DE");
 }
 
-function EmptyState({ hasKeywords }: { hasKeywords: boolean }) {
+interface EmptyStateProps {
+  hasKeywords: boolean;
+  viewMode: "matches" | "all";
+  onSwitchToAll: () => void;
+}
+
+function EmptyState({ hasKeywords, viewMode, onSwitchToAll }: EmptyStateProps) {
   return (
     <Card className="border-neutral-800 bg-card">
       <CardContent className="flex flex-col items-center justify-center py-16 text-center">
@@ -55,21 +62,39 @@ function EmptyState({ hasKeywords }: { hasKeywords: boolean }) {
           <FileSearch className="h-8 w-8 text-signal-orange" />
         </div>
         <h3 className="text-xl font-semibold text-foreground">
-          {hasKeywords
+          {!hasKeywords
+            ? "Dein Suchprofil ist noch leer"
+            : viewMode === "matches"
             ? "Keine passenden Aufträge gefunden"
-            : "Dein Suchprofil ist noch leer"}
+            : "Keine Ausschreibungen vorhanden"}
         </h3>
         <p className="mt-2 max-w-md text-muted-foreground">
-          {hasKeywords
-            ? "Versuche andere Suchbegriffe oder erweitere deinen Radius in den Einstellungen."
-            : "Richte zuerst dein Suchprofil ein, damit wir passende Ausschreibungen für dich finden können."}
+          {!hasKeywords
+            ? "Richte zuerst dein Suchprofil ein, damit wir passende Ausschreibungen für dich finden können."
+            : viewMode === "matches"
+            ? "Versuche andere Suchbegriffe oder schau dir alle verfügbaren Ausschreibungen an."
+            : "Aktuell sind keine Ausschreibungen in der Datenbank vorhanden."}
         </p>
-        <Button asChild className="mt-6 bg-signal-orange hover:bg-signal-orange-hover text-white">
-          <Link href="/dashboard/settings">
-            <Settings className="mr-2 h-4 w-4" />
-            {hasKeywords ? "Suchprofil anpassen" : "Suchprofil einrichten"}
-          </Link>
-        </Button>
+        
+        <div className="mt-6 flex flex-col sm:flex-row gap-3">
+          <Button asChild className="bg-signal-orange hover:bg-signal-orange-hover text-white">
+            <Link href="/dashboard/settings">
+              <Settings className="mr-2 h-4 w-4" />
+              {hasKeywords ? "Suchprofil anpassen" : "Suchprofil einrichten"}
+            </Link>
+          </Button>
+          
+          {hasKeywords && viewMode === "matches" && (
+            <Button
+              variant="outline"
+              className="border-neutral-700 hover:bg-neutral-800"
+              onClick={onSwitchToAll}
+            >
+              <Layers className="mr-2 h-4 w-4" />
+              Alle Ausschreibungen zeigen
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -87,10 +112,11 @@ export function DashboardContent({
   const router = useRouter();
   const [tenders, setTenders] = useState<Tender[]>(initialTenders);
   const [totalCount, setTotalCount] = useState(initialTotalCount);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [selectedTender, setSelectedTender] = useState<Tender | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [viewMode, setViewMode] = useState<"matches" | "all">("matches");
   const [page, setPage] = useState(1);
   const LIMIT = 10;
 
@@ -105,7 +131,7 @@ export function DashboardContent({
   
   const isFirstMount = useRef(true);
 
-  const fetchTenders = async (pageNum: number, append: boolean = false) => {
+  const fetchTenders = async (pageNum: number, append: boolean = false, mode: "matches" | "all" = viewMode) => {
     try {
       if (!append) setIsLoading(true);
       const params = new URLSearchParams();
@@ -113,6 +139,9 @@ export function DashboardContent({
       params.append('limit', LIMIT.toString());
       if (statusFilter !== 'all') {
         params.append('status', statusFilter);
+      }
+      if (mode === 'all') {
+        params.append('showAll', 'true');
       }
       
       const res = await fetch(`/api/tenders?${params.toString()}`);
@@ -141,7 +170,12 @@ export function DashboardContent({
     setPage(1);
     fetchTenders(1, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
+  }, [statusFilter, viewMode]);
+
+  const handleViewModeChange = (mode: "matches" | "all") => {
+    setViewMode(mode);
+    setPage(1);
+  };
 
   const handleLoadMore = () => {
     const nextPage = page + 1;
@@ -201,6 +235,9 @@ export function DashboardContent({
 
   return (
     <div className="p-6 lg:p-8">
+      {/* Welcome Modal for new users */}
+      <WelcomeModal firstName={firstName} />
+
       {/* Delete Confirmation Modal */}
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent className="sm:max-w-md border-neutral-800 bg-card text-foreground">
@@ -263,7 +300,9 @@ export function DashboardContent({
             )}
             <p className="mt-2 text-muted-foreground">
               {tenders.length > 0
-                ? "Hier sind deine neuesten Ausschreibungen, die zu deinem Profil passen."
+                ? viewMode === "matches"
+                  ? "Hier sind deine neuesten Ausschreibungen, die zu deinem Profil passen."
+                  : "Alle verfügbaren Ausschreibungen in deinem Bereich."
                 : "Richte dein Suchprofil ein, um passende Aufträge zu finden."}
             </p>
           </div>
@@ -274,7 +313,7 @@ export function DashboardContent({
               <div className="flex items-center gap-2 rounded-lg bg-card border border-neutral-800 px-4 py-2">
                 <TrendingUp className="h-4 w-4 text-emerald-400" />
                 <span className="text-sm font-medium text-foreground">
-                  {tenders.length} neue Treffer
+                  {tenders.length} {viewMode === "matches" ? "Treffer" : "Ausschreibungen"}
                 </span>
               </div>
             </div>
@@ -282,8 +321,34 @@ export function DashboardContent({
         </div>
       </header>
 
-      {/* Search & Filter Bar */}
+      {/* View Mode Toggle & Filter Bar */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center">
+        {/* View Mode Toggle */}
+        <div className="flex rounded-lg border border-neutral-800 bg-card p-1">
+          <button
+            onClick={() => handleViewModeChange("matches")}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all ${
+              viewMode === "matches"
+                ? "bg-signal-orange text-white shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <ListFilter className="h-4 w-4" />
+            Meine Matches
+          </button>
+          <button
+            onClick={() => handleViewModeChange("all")}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all ${
+              viewMode === "all"
+                ? "bg-signal-orange text-white shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Layers className="h-4 w-4" />
+            Alle Ausschreibungen
+          </button>
+        </div>
+
         {/* Search Input */}
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -333,7 +398,9 @@ export function DashboardContent({
             </div>
             <div>
               <p className="text-2xl font-bold text-foreground">{totalCount}</p>
-              <p className="text-sm text-muted-foreground">Passende Aufträge</p>
+              <p className="text-sm text-muted-foreground">
+                {viewMode === "matches" ? "Passende Aufträge" : "Alle Aufträge"}
+              </p>
             </div>
           </div>
         </div>
@@ -375,11 +442,8 @@ export function DashboardContent({
           {/* Section Title */}
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-foreground">
-              Aktuelle Chancen für dich ({tenders.length} von {totalCount})
+              {viewMode === "matches" ? "Aktuelle Chancen für dich" : "Alle verfügbaren Ausschreibungen"} ({tenders.length} von {totalCount})
             </h2>
-            <Button variant="ghost" className="text-sm text-muted-foreground hover:text-foreground">
-              Alle anzeigen
-            </Button>
           </div>
 
           {/* Tender Cards List */}
@@ -420,7 +484,11 @@ export function DashboardContent({
           )}
         </>
       ) : (
-        <EmptyState hasKeywords={hasKeywords} />
+        <EmptyState 
+          hasKeywords={hasKeywords} 
+          viewMode={viewMode}
+          onSwitchToAll={() => handleViewModeChange("all")}
+        />
       )}
     </div>
   );

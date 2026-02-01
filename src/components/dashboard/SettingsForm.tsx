@@ -9,13 +9,29 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { MapPin, Search, Loader2, Save, Tag } from "lucide-react";
+import { MapPin, Search, Loader2, Save, Tag, CheckCircle2, Plus } from "lucide-react";
 
 interface SettingsFormProps {
   initialKeywords: string;
   initialLocation: string;
   initialRadius: number;
 }
+
+// Common trades for German craftsmen
+const SUGGESTED_KEYWORDS = [
+  { label: "Elektriker", value: "Elektro, Elektroinstallation" },
+  { label: "Maler", value: "Maler, Malerarbeiten, Anstrich" },
+  { label: "Dachdecker", value: "Dachdecker, Dacharbeiten, Dachsanierung" },
+  { label: "Sanitär", value: "Sanitär, Sanitärinstallation, Heizung" },
+  { label: "Tischler", value: "Tischler, Schreiner, Holzarbeiten" },
+  { label: "Maurer", value: "Maurer, Maurerarbeiten, Rohbau" },
+  { label: "Fliesenleger", value: "Fliesen, Fliesenarbeiten" },
+  { label: "Zimmerer", value: "Zimmerer, Zimmerarbeiten, Holzbau" },
+  { label: "Klempner", value: "Klempner, Klempnerarbeiten" },
+  { label: "Gerüstbau", value: "Gerüst, Gerüstbau" },
+  { label: "Trockenbau", value: "Trockenbau, Innenausbau" },
+  { label: "Bodenleger", value: "Bodenleger, Bodenbelag, Parkett" },
+];
 
 export function SettingsForm({
   initialKeywords,
@@ -26,10 +42,12 @@ export function SettingsForm({
   const [location, setLocation] = useState(initialLocation);
   const [radius, setRadius] = useState(initialRadius);
   const [isSaving, setIsSaving] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSaving(true);
+    setShowSuccess(false);
 
     const formData = new FormData();
     formData.set("keywords", keywords);
@@ -40,9 +58,12 @@ export function SettingsForm({
       const result = await saveSettings(formData);
 
       if (result.success) {
+        setShowSuccess(true);
         toast.success("Profil erfolgreich gespeichert", {
           description: "Deine Sucheinstellungen wurden aktualisiert.",
         });
+        // Hide success indicator after 3 seconds
+        setTimeout(() => setShowSuccess(false), 3000);
       } else if (result.error) {
         toast.error("Fehler beim Speichern", {
           description: result.error,
@@ -57,13 +78,46 @@ export function SettingsForm({
     }
   };
 
+  const addKeyword = (newKeywords: string) => {
+    const currentKeywords = keywords
+      .split(",")
+      .map((k) => k.trim().toLowerCase())
+      .filter(Boolean);
+    
+    const toAdd = newKeywords
+      .split(",")
+      .map((k) => k.trim())
+      .filter((k) => !currentKeywords.includes(k.toLowerCase()));
+    
+    if (toAdd.length > 0) {
+      const updatedKeywords = keywords ? `${keywords}, ${toAdd.join(", ")}` : toAdd.join(", ");
+      setKeywords(updatedKeywords);
+      toast.success(`"${toAdd[0]}" hinzugefügt`);
+    } else {
+      toast.info("Diese Begriffe sind bereits vorhanden");
+    }
+  };
+
+  const isKeywordActive = (value: string) => {
+    const currentKeywords = keywords.toLowerCase();
+    const checkKeywords = value.split(",").map((k) => k.trim().toLowerCase());
+    return checkKeywords.some((k) => currentKeywords.includes(k));
+  };
+
   return (
     <Card className="max-w-2xl border-neutral-800 bg-card">
       <form onSubmit={handleSubmit}>
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-signal-orange/10">
-              <Search className="h-5 w-5 text-signal-orange" />
+            <div className={cn(
+              "flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
+              showSuccess ? "bg-emerald-500/10" : "bg-signal-orange/10"
+            )}>
+              {showSuccess ? (
+                <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+              ) : (
+                <Search className="h-5 w-5 text-signal-orange" />
+              )}
             </div>
             <div>
               <h2 className="text-lg font-semibold text-foreground">
@@ -101,6 +155,35 @@ export function SettingsForm({
               Trenne Begriffe mit Komma. Wir finden Ausschreibungen, die diese
               Begriffe enthalten.
             </p>
+          </div>
+
+          {/* Suggested Keywords */}
+          <div className="space-y-3">
+            <Label className="text-foreground flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Schnellauswahl Gewerke
+            </Label>
+            <div className="flex flex-wrap gap-2">
+              {SUGGESTED_KEYWORDS.map((item) => {
+                const isActive = isKeywordActive(item.value);
+                return (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => addKeyword(item.value)}
+                    className={cn(
+                      "px-3 py-1.5 text-sm rounded-full border transition-all",
+                      isActive
+                        ? "bg-signal-orange/20 border-signal-orange/50 text-signal-orange"
+                        : "bg-neutral-800/50 border-neutral-700 text-muted-foreground hover:border-signal-orange/50 hover:text-foreground"
+                    )}
+                  >
+                    {isActive && <CheckCircle2 className="inline h-3 w-3 mr-1" />}
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Location Input */}
@@ -168,12 +251,23 @@ export function SettingsForm({
           <Button
             type="submit"
             disabled={isSaving}
-            className="bg-signal-orange hover:bg-signal-orange-hover text-white shadow-lg shadow-signal-orange/20"
+            className={cn(
+              "shadow-lg transition-all",
+              showSuccess 
+                ? "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20" 
+                : "bg-signal-orange hover:bg-signal-orange-hover shadow-signal-orange/20",
+              "text-white"
+            )}
           >
             {isSaving ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Speichern...
+              </>
+            ) : showSuccess ? (
+              <>
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                Gespeichert!
               </>
             ) : (
               <>
@@ -187,4 +281,3 @@ export function SettingsForm({
     </Card>
   );
 }
-
