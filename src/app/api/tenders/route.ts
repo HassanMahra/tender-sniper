@@ -1,9 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import Database from 'better-sqlite3';
 import path from 'path';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const query = searchParams.get('q');
+
     const dbPath = path.join(process.cwd(), 'backend', 'tenders.db');
     // verbose: console.log
     const db = new Database(dbPath);
@@ -16,8 +19,15 @@ export async function GET() {
       return NextResponse.json({ tenders: [], count: 0 });
     }
 
-    // Fetch tenders
-    const rows = db.prepare('SELECT * FROM tenders ORDER BY created_at DESC').all();
+    // Fetch tenders with optional search
+    let rows;
+    if (query) {
+      const stmt = db.prepare('SELECT * FROM tenders WHERE title LIKE ? OR description LIKE ? ORDER BY created_at DESC');
+      const pattern = `%${query}%`;
+      rows = stmt.all(pattern, pattern);
+    } else {
+      rows = db.prepare('SELECT * FROM tenders ORDER BY created_at DESC').all();
+    }
     
     const tenders = rows.map((row: any) => {
       let details: any = {};
