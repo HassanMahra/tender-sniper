@@ -158,7 +158,8 @@ export async function GET() {
     }
 
     const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+    // Use gemini-2.0-flash as it is consistent with the backend configuration
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     // 6. Jedes neue Item analysieren und speichern
     const results = [];
