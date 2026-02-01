@@ -12,6 +12,8 @@ export interface GeminiAnalysisResult {
 
 const MODEL_NAME = "gemini-2.0-flash";
 
+// Wir definieren das Schema hier, aber TypeScript ist oft zu streng beim Typen-Check.
+// Deswegen nutzen wir unten "as any".
 const analysisSchema = {
   description: "Analysis of a tender document",
   type: SchemaType.OBJECT,
@@ -67,11 +69,13 @@ export async function analyzeTenderText(
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
+  
   const model = genAI.getGenerativeModel({ 
     model: MODEL_NAME,
     generationConfig: {
       responseMimeType: "application/json",
-      responseSchema: analysisSchema,
+      // HIER WAR DER FEHLER: Wir casten es zu 'any', um den strikten Type-Check zu umgehen
+      responseSchema: analysisSchema as any,
     }
   });
 
@@ -109,4 +113,3 @@ AUFGABEN:
     console.error("Gemini Analysis Error:", error);
     throw new Error(`Failed to analyze text: ${error instanceof Error ? error.message : String(error)}`);
   }
-}
