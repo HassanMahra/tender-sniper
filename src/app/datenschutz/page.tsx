@@ -68,7 +68,7 @@ export default function DatenschutzPage() {
               Cookies
             </h3>
             <p>
-              Unsere Internetseiten verwenden so genannte "Cookies". Cookies sind
+              Unsere Internetseiten verwenden so genannte &quot;Cookies&quot;. Cookies sind
               kleine Datenpakete und richten auf Ihrem Endgerät keinen Schaden
               an. Sie werden entweder vorübergehend für die Dauer einer Sitzung
               (Session-Cookies) oder dauerhaft (permanente Cookies) auf Ihrem
@@ -222,4 +222,3 @@ export default function DatenschutzPage() {
     </div>
   );
 }
-

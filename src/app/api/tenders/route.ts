@@ -2,6 +2,20 @@ import { NextResponse, NextRequest } from 'next/server';
 import Database from 'better-sqlite3';
 import path from 'path';
 
+// Define the interface for a database row
+interface TenderRow {
+  id: number;
+  title: string;
+  description: string;
+  full_text?: string;
+  analysis_json: string;
+  source: string;
+  published_at: string;
+  link: string;
+  status: string;
+  created_at: string;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -21,9 +35,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch tenders with optional search and status
-    let rows;
     let sql = 'SELECT * FROM tenders WHERE 1=1';
-    const params: any[] = [];
+    const params: (string | number)[] = [];
 
     if (query) {
       sql += ' AND (title LIKE ? OR description LIKE ?)';
@@ -39,15 +52,15 @@ export async function GET(request: NextRequest) {
     sql += ' ORDER BY created_at DESC';
 
     const stmt = db.prepare(sql);
-    rows = stmt.all(...params);
+    const rows = stmt.all(...params) as TenderRow[];
     
-    const tenders = rows.map((row: any) => {
-      let details: any = {};
+    const tenders = rows.map((row) => {
+      let details: Record<string, unknown> = {};
       try {
         if (row.analysis_json) {
           details = JSON.parse(row.analysis_json);
         }
-      } catch (e) {
+      } catch {
         // ignore parse error
       }
 
@@ -55,10 +68,10 @@ export async function GET(request: NextRequest) {
         id: row.id.toString(),
         title: row.title,
         description: row.description,
-        location: details.ort || "Deutschland",
-        budget: details.budget || "k.A.",
-        deadline: details.frist || row.published_at,
-        category: details.gewerk || "Allgemein",
+        location: (details.ort as string) || "Deutschland",
+        budget: (details.budget as string) || "k.A.",
+        deadline: (details.frist as string) || row.published_at,
+        category: (details.gewerk as string) || "Allgemein",
         status: row.status || "new",
         source_url: row.link,
         matchScore: 0 // Client side calculation or placeholder
@@ -68,8 +81,9 @@ export async function GET(request: NextRequest) {
     db.close();
 
     return NextResponse.json({ tenders, count: tenders.length });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("API Error:", error);
-    return NextResponse.json({ error: "Internal Server Error", details: error.message }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ error: "Internal Server Error", details: message }, { status: 500 });
   }
 }

@@ -20,7 +20,7 @@ export default function AGBPage() {
               § 1 Geltungsbereich
             </h2>
             <p>
-              (1) Diese Allgemeinen Geschäftsbedingungen (nachfolgend "AGB")
+              (1) Diese Allgemeinen Geschäftsbedingungen (nachfolgend &quot;AGB&quot;)
               gelten für alle Verträge zwischen
             </p>
             <p className="mt-2">
@@ -30,11 +30,11 @@ export default function AGBPage() {
               <br />
               12629 Berlin
               <br />
-              (nachfolgend "Anbieter")
+              (nachfolgend &quot;Anbieter&quot;)
             </p>
             <p className="mt-4">
-              und dem Kunden (nachfolgend "Kunde") über die Nutzung der Plattform
-              "TenderSniper" (nachfolgend "Dienst").
+              und dem Kunden (nachfolgend &quot;Kunde&quot;) über die Nutzung der Plattform
+              &quot;TenderSniper&quot; (nachfolgend &quot;Dienst&quot;).
             </p>
             <p className="mt-4">
               (2) Der Dienst richtet sich ausschließlich an Unternehmer im Sinne
@@ -254,4 +254,3 @@ export default function AGBPage() {
     </div>
   );
 }
-

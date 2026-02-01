@@ -1,36 +1,96 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TenderSniper
 
-## Getting Started
+TenderSniper is a platform for automating the discovery and analysis of public tenders (Ausschreibungen). It combines a modern Next.js frontend with a Python-based scraper and analysis engine powered by Google Gemini AI.
 
-First, run the development server:
+## Features
+
+-   **Automated Scraping**: Fetches public tenders from sources like `bund.de`.
+-   **AI Analysis**: Uses Google Gemini AI to summarize tenders and extract key details (budget, location, deadline).
+-   **Modern UI**: Clean and responsive interface built with Next.js and Tailwind CSS.
+-   **Search & Filter**: Easily find relevant tenders.
+
+## Project Structure
+
+-   `src/`: Next.js Frontend application.
+-   `backend/`: Python backend scripts (scraper, database, API).
+-   `backend/tenders.db`: SQLite database storing tender data.
+
+## Prerequisites
+
+-   Node.js (v18 or higher)
+-   Python (3.8 or higher)
+-   A Google Cloud API Key for Gemini (Generative AI)
+
+## Setup
+
+### 1. Frontend Setup
+
+Install the Node.js dependencies:
+
+```bash
+npm install
+```
+
+Run the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to view the application.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 2. Backend Setup
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Navigate to the `backend` directory:
 
-## Learn More
+```bash
+cd backend
+```
 
-To learn more about Next.js, take a look at the following resources:
+(Optional) Create a virtual environment:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Install Python dependencies:
 
-## Deploy on Vercel
+```bash
+pip install -r requirements.txt
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 3. Running the Scraper
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+To fetch and analyze tenders, you need to run the scraper script. Make sure you have your Google API Key ready.
+
+```bash
+export GOOGLE_API_KEY="your-api-key-here"
+python scraper.py
+```
+
+The scraper will:
+1.  Fetch the RSS feed from `bund.de`.
+2.  Check for new tenders.
+3.  Download the full text.
+4.  Analyze the content using Gemini AI.
+5.  Save the results to `tenders.db`.
+
+### 4. Running the Backend API (Optional)
+
+The frontend currently reads directly from the SQLite database via Server Actions/API Routes in development, but a FastAPI backend is also available for future expansion.
+
+```bash
+python main.py
+```
+
+The API will be available at `http://localhost:8000`.
+
+## Configuration
+
+-   **Frontend**: `next.config.ts`, `tailwind.config.ts` (via postcss)
+-   **Backend**: `backend/scraper.py` (Edit `RSS_FEED_URL` or `MAX_ENTRIES` to customize scraping behavior)
+
+## License
+
+Private
