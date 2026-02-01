@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { TenderCard } from "@/components/dashboard/TenderCard";
 import { Search, SlidersHorizontal, TrendingUp, Clock, Zap, Building2, FileSearch, Settings, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -102,6 +102,8 @@ export function DashboardContent({
   // Use firstName if available, otherwise extract from email or use fallback
   const displayName = firstName || email.split("@")[0] || "Handwerker";
   const greeting = getGreeting();
+  
+  const isFirstMount = useRef(true);
 
   const fetchTenders = async (pageNum: number, append: boolean = false) => {
     try {
@@ -132,6 +134,10 @@ export function DashboardContent({
   };
 
   useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      return;
+    }
     setPage(1);
     fetchTenders(1, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps

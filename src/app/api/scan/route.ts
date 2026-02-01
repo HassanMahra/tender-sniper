@@ -6,9 +6,8 @@ import { fetchAndCleanPage } from "@/lib/text-utils";
 import { pLimit } from "@/lib/concurrency";
 import { ScanResponse, Tender } from "@/types/tender";
 
-const FEED_URL =
-  "https://www.service.bund.de/Content/DE/Ausschreibungen/Suche/Formular.html?nn=4641482&resultsPerPage=100&sortOrder=dateOfIssue_dt+desc&jobsrss=true";
-
+// Configuration
+const FEED_URL = "https://www.service.bund.de/Content/DE/Ausschreibungen/Suche/Formular.html?nn=4641482&resultsPerPage=100&sortOrder=dateOfIssue_dt+desc&jobsrss=true";
 const MAX_NEW_ITEMS = 10;
 const CONCURRENCY_LIMIT = 3;
 
@@ -21,12 +20,35 @@ interface RSSItem {
 }
 
 export async function GET() {
+  const logPrefix = "[TenderScan]";
+  console.log(`${logPrefix} Starting scan...`);
+
   try {
+    // 0. Pre-flight checks
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    if (!geminiApiKey) {
+      console.error(`${logPrefix} Missing GEMINI_API_KEY`);
+      return NextResponse.json<ScanResponse>(
+        { success: false, error: "Configuration Error: GEMINI_API_KEY missing" },
+        { status: 500 }
+      );
+    }
+
     // 1. Fetch RSS Feed
     const parser = new Parser();
-    const feed = await parser.parseURL(FEED_URL);
+    let feed;
+    try {
+      feed = await parser.parseURL(FEED_URL);
+    } catch (err) {
+      console.error(`${logPrefix} RSS Parse Error:`, err);
+      return NextResponse.json<ScanResponse>(
+        { success: false, error: "Failed to parse RSS feed" },
+        { status: 500 }
+      );
+    }
 
     if (!feed.items || feed.items.length === 0) {
+      console.log(`${logPrefix} No items in feed`);
       return NextResponse.json<ScanResponse>({
         success: true,
         stats: { gefunden: 0, uebersprungen: 0, analysiert: 0, fehler: 0, verbleibend: 0 },
@@ -55,9 +77,9 @@ export async function GET() {
       .in("source_url", feedUrls);
 
     if (dbError) {
-      console.error("Supabase Error:", dbError);
+      console.error(`${logPrefix} Database Error:`, dbError);
       return NextResponse.json<ScanResponse>(
-        { success: false, error: "Datenbankfehler" },
+        { success: false, error: "Datenbankfehler bei Duplikatprüfung" },
         { status: 500 }
       );
     }
@@ -71,6 +93,8 @@ export async function GET() {
 
     const skippedCount = feed.items.length - newItems.length;
     const itemsToProcess = newItems.slice(0, MAX_NEW_ITEMS);
+
+    console.log(`${logPrefix} Found ${feed.items.length} items. New: ${newItems.length}. Processing: ${itemsToProcess.length}. Skipped: ${skippedCount}.`);
 
     if (itemsToProcess.length === 0) {
       return NextResponse.json<ScanResponse>({
@@ -86,31 +110,25 @@ export async function GET() {
       });
     }
 
-    // 5. Initialize Services
-    const geminiApiKey = process.env.GEMINI_API_KEY;
-    if (!geminiApiKey) {
-      return NextResponse.json<ScanResponse>(
-        { success: false, error: "GEMINI_API_KEY nicht konfiguriert" },
-        { status: 500 }
-      );
-    }
-
-    // 6. Process items concurrently
+    // 5. Process items concurrently
     const limit = pLimit(CONCURRENCY_LIMIT);
     const results: Partial<Tender>[] = [];
     const errors: { url?: string; error: string }[] = [];
 
     const tasks = itemsToProcess.map((item: RSSItem) =>
       limit(async () => {
+        const itemUrl = item.link;
+        if (!itemUrl) return;
+
         try {
-          if (!item.link) return;
+          console.log(`${logPrefix} Processing: ${itemUrl}`);
 
           // Fetch content
-          const pageContent = await fetchAndCleanPage(item.link);
+          const pageContent = await fetchAndCleanPage(itemUrl);
           
           const textToAnalyze = pageContent
             ? `TITEL: ${item.title || ""}\n\nVOLLSTÄNDIGER AUSSCHREIBUNGSTEXT:\n${pageContent}`
-            : `TITEL: ${item.title || ""}\nBESCHREIBUNG: ${item.contentSnippet || item.content || ""}\nLINK: ${item.link}`;
+            : `TITEL: ${item.title || ""}\nBESCHREIBUNG: ${item.contentSnippet || item.content || ""}\nLINK: ${itemUrl}`;
 
           // Analyze with Gemini
           const analysis = await analyzeTenderText(textToAnalyze, geminiApiKey);
@@ -118,9 +136,10 @@ export async function GET() {
           // Validate deadline
           let parsedDeadline: string | null = null;
           if (analysis.deadline && analysis.deadline !== "k.A.") {
+             // Gemini is instructed to return YYYY-MM-DD
              const d = new Date(analysis.deadline);
              if (!isNaN(d.getTime())) {
-                 parsedDeadline = analysis.deadline; // Keep original if valid, or use d.toISOString() if we want standardization
+                 parsedDeadline = analysis.deadline;
              }
           }
 
@@ -132,7 +151,7 @@ export async function GET() {
             budget: analysis.budget || null,
             deadline: parsedDeadline,
             category: analysis.category || null,
-            source_url: item.link,
+            source_url: itemUrl,
             published_at: item.pubDate ? new Date(item.pubDate).toISOString() : null,
             requirements: analysis.requirements || [],
           };
@@ -142,8 +161,9 @@ export async function GET() {
             .insert(tenderData);
 
           if (insertError) {
-            // Fallback: Try inserting without requirements if column missing
+            // Fallback: Try inserting without requirements if column missing (Legacy schema support)
             if (insertError.message.includes('column "requirements" of relation "tenders" does not exist')) {
+                 console.warn(`${logPrefix} 'requirements' column missing. Retrying without it.`);
                  const { requirements, ...tenderDataWithoutReq } = tenderData;
                  const { error: retryError } = await supabase
                     .from("tenders")
@@ -164,9 +184,9 @@ export async function GET() {
           });
 
         } catch (err) {
-          console.error(`Error processing ${item.link}:`, err);
+          console.error(`${logPrefix} Error processing ${itemUrl}:`, err);
           errors.push({
-            url: item.link,
+            url: itemUrl,
             error: err instanceof Error ? err.message : "Unknown error",
           });
         }
@@ -174,6 +194,8 @@ export async function GET() {
     );
 
     await Promise.all(tasks);
+
+    console.log(`${logPrefix} Completed. Analyzed: ${results.length}. Errors: ${errors.length}.`);
 
     return NextResponse.json<ScanResponse>({
       success: true,
@@ -190,7 +212,7 @@ export async function GET() {
     });
 
   } catch (error) {
-    console.error("Scanner Error:", error);
+    console.error("[TenderScan] Fatal Error:", error);
     return NextResponse.json<ScanResponse>(
       {
         success: false,

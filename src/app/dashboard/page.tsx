@@ -39,9 +39,6 @@ export default async function DashboardPage() {
       ? userSettings.keywords.split(",").map((k: string) => k.trim().toLowerCase()).filter(Boolean)
       : [];
 
-    console.log("🔍 [Dashboard] User keywords:", keywords);
-    console.log("🔍 [Dashboard] User location:", userSettings?.location);
-
     if (keywords.length > 0) {
       // Build OR conditions for keyword matching
       // Search in title, description, and category
@@ -59,9 +56,8 @@ export default async function DashboardPage() {
         .limit(20);
 
       if (error) {
-        console.log("🔍 [Dashboard] Query error:", error.message);
+        console.error("🔍 [Dashboard] Query error:", error.message);
       } else {
-        console.log("🔍 [Dashboard] Found", matchedTenders?.length, "matching tenders");
         tenders = (matchedTenders || []).map((t: DbTender) => ({
           ...mapDbTenderToTender(t),
           matchScore: calculateMatchScore(t, keywords),
@@ -77,15 +73,14 @@ export default async function DashboardPage() {
         .limit(10);
 
       if (error) {
-        console.log("🔍 [Dashboard] Query error:", error.message);
+        console.error("🔍 [Dashboard] Query error:", error.message);
       } else {
-        console.log("🔍 [Dashboard] Showing latest", latestTenders?.length, "tenders");
         tenders = (latestTenders || []).map((t: DbTender) => mapDbTenderToTender(t));
         totalCount = count || 0;
       }
     }
   } catch (error) {
-    console.log("🔍 [Dashboard] Error fetching tenders:", error);
+    console.error("🔍 [Dashboard] Error fetching tenders:", error);
   }
 
   // Sort by match score if available

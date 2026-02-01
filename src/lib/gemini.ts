@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 
 export interface GeminiAnalysisResult {
   budget: string;
@@ -12,12 +12,68 @@ export interface GeminiAnalysisResult {
 
 const MODEL_NAME = "gemini-2.0-flash";
 
+const analysisSchema = {
+  description: "Analysis of a tender document",
+  type: SchemaType.OBJECT,
+  properties: {
+    budget: {
+      type: SchemaType.STRING,
+      description: "Exact budget value (e.g. '150.000 €') or estimate (e.g. 'ca. 50.000 - 100.000 € (geschätzt)')",
+      nullable: false,
+    },
+    budget_is_estimate: {
+      type: SchemaType.BOOLEAN,
+      description: "True if the budget is an estimate, false if it is an exact value found in the text",
+      nullable: false,
+    },
+    location: {
+      type: SchemaType.STRING,
+      description: "City or location of execution",
+      nullable: false,
+    },
+    category: {
+      type: SchemaType.STRING,
+      description: "Trade or category (e.g. Dachdecker, Elektro, Tiefbau)",
+      nullable: false,
+    },
+    deadline: {
+      type: SchemaType.STRING,
+      description: "Submission deadline in YYYY-MM-DD format, or 'k.A.' if not found",
+      nullable: false,
+    },
+    description_short: {
+      type: SchemaType.STRING,
+      description: "Short professional summary in 1-2 sentences",
+      nullable: false,
+    },
+    requirements: {
+      type: SchemaType.ARRAY,
+      description: "List of technical requirements, certificates, or qualifications",
+      items: {
+        type: SchemaType.STRING,
+      },
+      nullable: false,
+    },
+  },
+  required: ["budget", "budget_is_estimate", "location", "category", "deadline", "description_short", "requirements"],
+};
+
 export async function analyzeTenderText(
   fullText: string, 
   apiKey: string
 ): Promise<GeminiAnalysisResult> {
+  if (!apiKey) {
+    throw new Error("API key is missing");
+  }
+
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: MODEL_NAME });
+  const model = genAI.getGenerativeModel({ 
+    model: MODEL_NAME,
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: analysisSchema,
+    }
+  });
 
   const prompt = `Analysiere diesen VOLLSTÄNDIGEN Ausschreibungstext für einen Bauauftrag.
 
@@ -41,28 +97,16 @@ AUFGABEN:
    - Gewerk/Kategorie
    - Abgabefrist
    - Kurzbeschreibung (1-2 Sätze)
+`;
 
-Antworte NUR mit einem validen JSON-Objekt:
-{
-  "budget": "Exakter Wert z.B. '150.000 €' ODER Schätzung z.B. 'ca. 50.000 - 100.000 € (geschätzt)'",
-  "budget_is_estimate": true/false,
-  "location": "Stadt/Ort",
-  "category": "Gewerk (z.B. Dachdecker, Elektro, Tiefbau, Sanitär, Maler)",
-  "deadline": "YYYY-MM-DD oder 'k.A.'",
-  "description_short": "Professionelle Kurzbeschreibung in 1-2 Sätzen",
-  "requirements": ["Meisterbrief erforderlich", "Haftpflichtversicherung min. 1 Mio €", "ISO 9001 Zertifizierung", "..."]
-}`;
-
-  const result = await model.generateContent(prompt);
-  const responseText = result.response.text();
-
-  // Clean markdown code blocks if present
-  const cleanText = responseText.replace(/```json/g, "").replace(/```/g, "");
-  
-  const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new Error("Kein JSON in Gemini-Antwort gefunden");
+  try {
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
+    
+    // With JSON mode, we can parse directly
+    return JSON.parse(responseText) as GeminiAnalysisResult;
+  } catch (error) {
+    console.error("Gemini Analysis Error:", error);
+    throw new Error(`Failed to analyze text: ${error instanceof Error ? error.message : String(error)}`);
   }
-
-  return JSON.parse(jsonMatch[0]) as GeminiAnalysisResult;
 }

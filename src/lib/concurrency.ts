@@ -1,5 +1,9 @@
 /**
  * Simple p-limit implementation to limit concurrency.
+ * Useful for limiting the number of concurrent Promise-based operations (e.g. API calls).
+ * 
+ * @param concurrency Maximum number of concurrent operations
+ * @returns A function that accepts a promise-returning function and returns a Promise
  */
 export function pLimit(concurrency: number) {
   const queue: (() => Promise<void>)[] = [];
@@ -8,6 +12,7 @@ export function pLimit(concurrency: number) {
   const next = () => {
     activeCount--;
     if (queue.length > 0) {
+      // Non-null assertion is safe because queue.length > 0
       queue.shift()!();
     }
   };
